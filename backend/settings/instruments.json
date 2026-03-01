@@ -1,0 +1,45 @@
+{
+    "mode": "instruments",
+    "sliders": [
+        {
+            "label": "Piano",
+            "ranges": [
+                [
+                    200,
+                    4000
+                ]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Guitar",
+            "ranges": [
+                [
+                    80,
+                    1200
+                ]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Drums",
+            "ranges": [
+                [
+                    20,
+                    500
+                ]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Violin",
+            "ranges": [
+                [
+                    200,
+                    3500
+                ]
+            ],
+            "default_gain": 1.0
+        }
+    ]
+}

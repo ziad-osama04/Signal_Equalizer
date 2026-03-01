@@ -1,0 +1,20 @@
+# FastAPI Backend
+FastAPI
+uvicorn
+pydantic
+python-multipart
+httpx
+requests
+loguru
+
+# Core DSP / Audio
+numpy
+scipy
+soundfile
+
+# Utilities / Development
+tqdm
+filelock
+pyyaml
+jinja2
+fsspec

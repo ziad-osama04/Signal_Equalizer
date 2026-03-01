@@ -1,0 +1,9 @@
+{
+    "available_domains": [
+        "fourier",
+        "dct",
+        "haar_wavelet"
+    ],
+    "default_domain": "fourier",
+    "saved_configs": []
+}

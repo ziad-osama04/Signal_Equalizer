@@ -1,0 +1,37 @@
+{
+    "mode": "animals",
+    "sliders": [
+        {
+            "label": "Dog (Bark)",
+            "ranges": [
+                [281,468],
+                [703,843]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Cat (Meow)",
+            "ranges": [
+                [1100, 1300],
+                [1700,1900]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Bird (Chirp)",
+            "ranges": [
+                [2109, 2156]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Cow (Moo)",
+            "ranges": [
+                [129, 281],
+                [468, 703],
+                [843, 1100]
+            ],
+            "default_gain": 1.0
+        }
+    ]
+}
