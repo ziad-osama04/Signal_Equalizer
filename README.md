@@ -271,9 +271,6 @@ All routes are prefixed and documented at `http://localhost:8000/docs`.
 
 ## 🖥 Frontend
 
-<!-- Add frontend architecture screenshot here -->
-![Frontend Architecture](images/frontend_architecture.png)
-
 The frontend is a **React + Vite** SPA styled with **Tailwind CSS**.
 
 ### Key components
@@ -331,8 +328,6 @@ Each slider can span **multiple non-contiguous frequency ranges**:
 ## 🤖 AI Models
 
 ### Instruments — Demucs `htdemucs_6s`
-<!-- Add diagram of Demucs separation here -->
-![Demucs Separation](images/demucs_diagram.png)
 
 Separates a music mixture into **6 stems**: drums, bass, other, vocals, guitar, piano.
 
@@ -341,8 +336,6 @@ Separates a music mixture into **6 stems**: drums, bass, other, vocals, guitar, 
 - Falls back to Gaussian soft-mask spectral separation if `demucs` is not installed.
 
 ### Voices — Asteroid `ConvTasNet`
-<!-- Add diagram of Asteroid recursive separation here -->
-![Asteroid Separation](images/asteroid_diagram.png)
 
 Separates a mixture into **4 voices** using recursive 2-speaker passes:
 
@@ -368,9 +361,6 @@ Pass 2b:    B     →  [Voice 3,  Voice 4]
 ## 🔲 Edge Deployment
 
 The edge module simulates deploying the equalizer to a resource-constrained device.
-
-<!-- Add edge simulation screenshot here -->
-![Edge Simulation](images/edge_simulation.png)
 
 Configuration lives in `backend/edge/edge_config.json`:
 
