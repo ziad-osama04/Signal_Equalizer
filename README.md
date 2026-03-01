@@ -411,18 +411,6 @@ All mode configurations live in `backend/settings/` and are plain JSON — edita
 - **Basis detection** — `core/basis_detection.py` evaluates Fourier, DCT, and Haar wavelet representations and selects the sparsest (best) basis for a given signal.
 - **Linked viewers** — both cine viewers share the same time position and zoom level via `SignalContext`.
 - **Audiogram scale** — frequency axis can be switched to audiogram (dB HL) scale for hearing-related analysis.
-
----
-
-## 👥 Team
-
-| Member | Ownership |
-|--------|-----------|
-| Member 1 | AI models, Edge, Comparison, Backend infrastructure |
-| Member 2 | Core DSP (FFT, spectrogram, basis detection) |
-| Member 3 | Equalizer modes, Settings, Signal processing |
-| Member 4 | Frontend — React components, UI/UX |
-
 ---
 
 ## 📄 License
