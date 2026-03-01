@@ -1,5 +1,5 @@
 """
-Audio upload and playback routes.
+Audio upload, playback, and spectrogram routes.
 
 Models are defined in models/audio_models.py to avoid repetition
 across routes that share the same data contracts.
@@ -24,6 +24,16 @@ OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 _ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
+
+
+def _find_audio(file_id: str) -> str:
+    """Resolves a file_id to an absolute path; raises HTTP 404 if missing."""
+    for directory in [UPLOAD_DIR, OUTPUT_DIR]:
+        if os.path.isdir(directory):
+            for f in os.listdir(directory):
+                if f.startswith(file_id):
+                    return os.path.join(directory, f)
+    raise HTTPException(status_code=404, detail="Audio file not found")
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -63,18 +73,39 @@ async def upload_audio(file: UploadFile = File(...)):
     )
 
 
+@router.get("/spectrogram/{file_id}")
+def get_spectrogram(file_id: str):
+    """
+    Computes and returns the spectrogram for any existing audio file
+    (upload or output). Used by AIComparison to display spectrograms
+    for the eq_output_id and ai_output_id after a comparison run.
+
+    Returns: { f: [...], t: [...], Sxx: [[...]] }
+    """
+    path = _find_audio(file_id)
+
+    try:
+        data, sr = load_audio(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error reading audio: {exc}")
+
+    f_axis, t_axis, Sxx = compute_spectrogram(data, sr, nperseg=256)
+
+    logger.info("Spectrogram computed", extra={"file_id": file_id})
+
+    return {
+        "f":   f_axis.tolist(),
+        "t":   t_axis.tolist(),
+        "Sxx": Sxx.tolist(),
+    }
+
+
 @router.get("/play/{file_id}")
 async def play_audio(file_id: str):
     """
     Streams an audio file back to the browser for in-browser playback.
     Searches both uploads/ and outputs/ directories.
     """
-    for directory in [UPLOAD_DIR, OUTPUT_DIR]:
-        if os.path.isdir(directory):
-            for f in os.listdir(directory):
-                if f.startswith(file_id):
-                    path = os.path.join(directory, f)
-                    logger.info("Serving audio", extra={"file_id": file_id, "file_path": path})
-                    return FileResponse(path, media_type="audio/wav")
-
-    raise HTTPException(status_code=404, detail="Audio file not found")
+    path = _find_audio(file_id)
+    logger.info("Serving audio", extra={"file_id": file_id, "file_path": path})
+    return FileResponse(path, media_type="audio/wav")

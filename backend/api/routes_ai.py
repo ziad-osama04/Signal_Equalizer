@@ -1,7 +1,13 @@
 """
 AI separation and comparison routes.
 
-Models are defined in models/ai_models.py to avoid repetition.
+Routing logic:
+  mode="instruments"  →  demucs_separate()    (htdemucs_6s, 6 stems)
+  mode="voices"       →  asteroid_separate()  (ConvTasNet, 4 voices)
+  mode="animals"      →  spectral_separate()  (soft spectral mask fallback)
+
+Each function falls back to spectral masking automatically if the
+corresponding library is not installed.
 """
 
 import os
@@ -13,7 +19,8 @@ from fastapi import APIRouter, HTTPException
 from utils.file_loader import load_audio
 from utils.audio_exporter import save_audio
 from utils.logger import get_logger
-from ai.demucs_wrapper import spectral_separate
+from ai.demucs_wrapper import demucs_separate, spectral_separate, _DEMUCS_AVAILABLE
+from ai.asteroid_wrapper import asteroid_separate, _ASTEROID_AVAILABLE
 from ai.comparison_report import generate_comparison_report
 from modes.generic_mode import apply_generic_eq
 from models.ai_models import (
@@ -23,6 +30,8 @@ from models.ai_models import (
     CompareRequest,
     CompareResponse,
     MetricsData,
+    MixStemsRequest,
+    MixStemsResponse,
 )
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -33,10 +42,9 @@ OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _find_audio(file_id: str) -> str:
-    """Resolves a file_id to an absolute path; raises HTTP 404 if missing."""
     for directory in [UPLOAD_DIR, OUTPUT_DIR]:
         if os.path.isdir(directory):
             for f in os.listdir(directory):
@@ -45,8 +53,7 @@ def _find_audio(file_id: str) -> str:
     raise HTTPException(status_code=404, detail="Audio file not found")
 
 
-def _load_mode_bands(mode: str) -> list | None:
-    """Loads the source bands from the mode's settings JSON; returns None if missing."""
+def _load_mode_bands(mode: str):
     settings_dir = os.path.join(os.path.dirname(__file__), "..", "settings")
     path = os.path.join(settings_dir, f"{mode}.json")
     if not os.path.exists(path):
@@ -56,13 +63,39 @@ def _load_mode_bands(mode: str) -> list | None:
     return [{"label": s["label"], "ranges": s["ranges"]} for s in config["sliders"]]
 
 
+def _separate_by_mode(signal, sr, mode, bands):
+    if mode == "instruments":
+        separated = demucs_separate(signal, sr)
+        method = "demucs" if _DEMUCS_AVAILABLE else "spectral"
+    elif mode == "voices":
+        num_voices = len(bands) if bands else 4
+        separated = asteroid_separate(signal, sr, num_voices=num_voices)
+        method = "asteroid" if _ASTEROID_AVAILABLE else "spectral"
+    else:
+        separated = spectral_separate(signal, sr, bands)
+        method = "spectral"
+    return separated, method
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.get("/capabilities")
+def get_capabilities():
+    """Reports which AI backends are available on this server."""
+    return {
+        "demucs_available":   _DEMUCS_AVAILABLE,
+        "asteroid_available": _ASTEROID_AVAILABLE,
+        "instruments_method": "demucs"   if _DEMUCS_AVAILABLE   else "spectral",
+        "voices_method":      "asteroid" if _ASTEROID_AVAILABLE else "spectral",
+        "animals_method":     "spectral",
+    }
+
 
 @router.post("/process", response_model=AIProcessResponse)
 def ai_process(req: AIProcessRequest):
     """
-    Runs the AI spectral separator on the uploaded audio, producing one
-    isolated track per source band defined in the mode's settings.
+    Separates uploaded audio into individual source tracks.
+    instruments → Demucs | voices → Asteroid | animals → spectral
     """
     source_path = _find_audio(req.file_id)
     signal, sr = load_audio(source_path)
@@ -71,36 +104,28 @@ def ai_process(req: AIProcessRequest):
     if bands is None:
         raise HTTPException(status_code=400, detail=f"Unknown mode: {req.mode}")
 
-    logger.info(
-        "AI separation started",
-        extra={"file_id": req.file_id, "mode": req.mode, "num_bands": len(bands)},
-    )
+    logger.info("AI separation started", extra={"file_id": req.file_id, "mode": req.mode})
 
-    separated = spectral_separate(signal, sr, bands)
+    separated, method = _separate_by_mode(signal, sr, req.mode, bands)
 
     tracks = []
     for source in separated:
         track_id = str(uuid.uuid4())
-        track_path = os.path.join(OUTPUT_DIR, f"{track_id}.wav")
-        save_audio(source["signal"], sr, track_path)
-        tracks.append(
-            TrackInfo(
-                label=source["label"],
-                track_id=track_id,
-                num_samples=len(source["signal"]),
-            )
-        )
+        save_audio(source["signal"], sr, os.path.join(OUTPUT_DIR, f"{track_id}.wav"))
+        tracks.append(TrackInfo(
+            label=source["label"],
+            track_id=track_id,
+            num_samples=len(source["signal"]),
+            method=method,
+        ))
 
-    logger.info("AI separation complete", extra={"num_tracks": len(tracks)})
-    return AIProcessResponse(tracks=tracks)
+    logger.info("AI separation complete", extra={"num_tracks": len(tracks), "method": method})
+    return AIProcessResponse(tracks=tracks, method_used=method)
 
 
 @router.post("/compare", response_model=CompareResponse)
 def compare_eq_vs_ai(req: CompareRequest):
-    """
-    Compares the equalizer output against the AI spectral separator output.
-    Returns SNR, MSE, and Pearson correlation for both, plus a verdict.
-    """
+    """Compares equalizer output vs AI separator. Returns SNR, MSE, correlation, verdict."""
     source_path = _find_audio(req.file_id)
     signal, sr = load_audio(source_path)
 
@@ -108,35 +133,29 @@ def compare_eq_vs_ai(req: CompareRequest):
     if bands is None:
         raise HTTPException(status_code=400, detail=f"Unknown mode: {req.mode}")
 
-    # 1. Build equalizer frequency windows from the mode's bands + requested gains
+    # 1. Equalizer output
     windows = []
     for i, band in enumerate(bands):
         gain = req.gains[i] if i < len(req.gains) else 1.0
         for rng in band["ranges"]:
             windows.append({"start_freq": rng[0], "end_freq": rng[1], "gain": gain})
-
     eq_output = apply_generic_eq(signal, sr, windows)
 
-    # 2. AI separator → weighted sum of isolated tracks
-    separated = spectral_separate(signal, sr, bands)
+    # 2. AI output
+    separated, method = _separate_by_mode(signal, sr, req.mode, bands)
     ai_output = np.zeros(len(signal))
     for i, source in enumerate(separated):
         gain = req.gains[i] if i < len(req.gains) else 1.0
-        ai_output[: len(source["signal"])] += source["signal"] * gain
+        s = source["signal"]
+        ai_output[: len(s)] += s * gain
 
-    # 3. Comparison report
+    # 3. Report + save
     report = generate_comparison_report(signal, eq_output, ai_output)
-
-    # 4. Persist both outputs
-    eq_id = str(uuid.uuid4())
-    ai_id = str(uuid.uuid4())
+    eq_id, ai_id = str(uuid.uuid4()), str(uuid.uuid4())
     save_audio(eq_output, sr, os.path.join(OUTPUT_DIR, f"{eq_id}.wav"))
     save_audio(ai_output, sr, os.path.join(OUTPUT_DIR, f"{ai_id}.wav"))
 
-    logger.info(
-        "Comparison complete",
-        extra={"verdict": report["verdict"], "file_id": req.file_id},
-    )
+    logger.info("Comparison complete", extra={"verdict": report["verdict"], "method": method})
 
     return CompareResponse(
         equalizer=MetricsData(**report["equalizer"]),
@@ -144,4 +163,44 @@ def compare_eq_vs_ai(req: CompareRequest):
         verdict=report["verdict"],
         eq_output_id=eq_id,
         ai_output_id=ai_id,
+        method_used=method,
+    )
+
+
+@router.post("/mix_stems", response_model=MixStemsResponse)
+def mix_stems(req: MixStemsRequest):
+    """
+    Re-mixes already-separated tracks with per-stem gain control.
+    Call /process first to get track_ids, then send them back here
+    with adjusted gains — no re-running the model needed.
+    """
+    if not req.track_ids:
+        raise HTTPException(status_code=400, detail="No track_ids provided.")
+
+    mixed = None
+    for label, track_id in req.track_ids.items():
+        gain = req.gains.get(label, 1.0)
+        track_signal, _ = load_audio(_find_audio(track_id))
+        scaled = track_signal * gain
+        if mixed is None:
+            mixed = scaled.copy()
+        else:
+            n = min(len(mixed), len(scaled))
+            mixed = mixed[:n] + scaled[:n]
+
+    if mixed is None:
+        raise HTTPException(status_code=400, detail="No audio tracks could be loaded.")
+
+    max_val = np.abs(mixed).max()
+    if max_val > 0.99:
+        mixed = mixed * (0.99 / max_val)
+
+    output_id = str(uuid.uuid4())
+    save_audio(mixed, req.sample_rate, os.path.join(OUTPUT_DIR, f"{output_id}.wav"))
+    logger.info("mix_stems complete", extra={"output_id": output_id})
+
+    return MixStemsResponse(
+        output_id=output_id,
+        num_samples=len(mixed),
+        sample_rate=req.sample_rate,
     )
