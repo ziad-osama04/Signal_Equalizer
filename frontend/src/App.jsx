@@ -179,7 +179,7 @@ function Equalizer() {
           </div>
         </div>
         {/* Center: Sliders + Process Button + Footer aligned together */}
-        <div className="flex flex-col items-center gap-3 bg-gray-900/50 backdrop-blur rounded-xl p-4 border border-gray-800 min-w-[280px] max-w-[380px] w-[360px] h-full">
+        <div className="flex flex-col items-center gap-3 bg-gray-900/50 backdrop-blur rounded-xl p-4 border border-gray-800 w-[400px] h-full">
           <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">Equalizer</h2>
           {sliderConfig.length > 0 && (
             <div className="flex gap-3">
