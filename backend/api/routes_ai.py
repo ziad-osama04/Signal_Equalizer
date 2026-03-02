@@ -129,17 +129,27 @@ def compare_eq_vs_ai(req: CompareRequest):
     source_path = _find_audio(req.file_id)
     signal, sr = load_audio(source_path)
 
-    bands = _load_mode_bands(req.mode)
-    if bands is None:
-        raise HTTPException(status_code=400, detail=f"Unknown mode: {req.mode}")
-
     # 1. Equalizer output
-    windows = []
-    for i, band in enumerate(bands):
-        gain = req.gains[i] if i < len(req.gains) else 1.0
-        for rng in band["ranges"]:
-            windows.append({"start_freq": rng[0], "end_freq": rng[1], "gain": gain})
-    eq_output = apply_generic_eq(signal, sr, windows)
+    if req.mode == "generic":
+        # Generic mode: use windows from the request directly
+        if req.windows:
+            windows = [{"start_freq": w["start_freq"], "end_freq": w["end_freq"], "gain": w["gain"]} for w in req.windows]
+        else:
+            windows = [{"start_freq": 20, "end_freq": 20000, "gain": 1.0}]
+        eq_output = apply_generic_eq(signal, sr, windows, domain=req.domain)
+
+        # For AI side in generic mode, create spectral bands from the windows
+        bands = [{"label": f"Band {i+1}", "ranges": [[w["start_freq"], w["end_freq"]]]} for i, w in enumerate(windows)]
+    else:
+        bands = _load_mode_bands(req.mode)
+        if bands is None:
+            raise HTTPException(status_code=400, detail=f"Unknown mode: {req.mode}")
+        windows = []
+        for i, band in enumerate(bands):
+            gain = req.gains[i] if i < len(req.gains) else 1.0
+            for rng in band["ranges"]:
+                windows.append({"start_freq": rng[0], "end_freq": rng[1], "gain": gain})
+        eq_output = apply_generic_eq(signal, sr, windows, domain=req.domain)
 
     # 2. AI output
     separated, method = _separate_by_mode(signal, sr, req.mode, bands)

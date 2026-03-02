@@ -1,74 +1,95 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useSync } from '../core/SyncContext';
+import AudioEngine from '../core/AudioEngine';
 
-export default function ControlPanel({ audioUrl }) {
-    const audioRef = useRef(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [speed, setSpeed] = useState(1);
+/**
+ * ControlPanel — Full audio playback controls:
+ *   Play / Pause / Stop / Speed / Zoom reset
+ *   Wired to AudioEngine (Web Audio API) and SyncContext for linked playback.
+ *
+ * Props:
+ *   audioUrl      — URL of the audio file to play
+ *   audioEngine   — shared AudioEngine instance (from parent)
+ *   onEngineReady — callback(engine) when engine is loaded
+ */
+export default function ControlPanel({ audioUrl, audioEngine, onEngineReady }) {
+    const {
+        currentTime, setCurrentTime,
+        isPlaying, setIsPlaying,
+        speed, setSpeed,
+        resetView,
+    } = useSync();
 
-    // Keep the audio element in sync with speed changes
+    const rafRef = useRef(null);
+
+    // Load audio into engine when URL changes
     useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.playbackRate = speed;
-        }
-    }, [speed]);
+        if (!audioEngine || !audioUrl) return;
+        audioEngine.load(audioUrl).then(() => {
+            if (onEngineReady) onEngineReady(audioEngine);
+        }).catch(err => console.error('AudioEngine load error:', err));
 
-    // Reset state when audio URL changes
-    useEffect(() => {
-        setIsPlaying(false);
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-            audioRef.current.playbackRate = speed;
-        }
-    }, [audioUrl]);
+        return () => {
+            audioEngine.stop();
+            setIsPlaying(false);
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        };
+    }, [audioUrl, audioEngine]);
+
+    // Animation loop to sync playhead
+    const startTimeSync = useCallback(() => {
+        const tick = () => {
+            if (!audioEngine?.isPlaying) {
+                setIsPlaying(false);
+                return;
+            }
+            setCurrentTime(audioEngine.getCurrentTime());
+            rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+    }, [audioEngine]);
 
     const play = () => {
-        if (!audioRef.current || !audioUrl) return;
-        audioRef.current.playbackRate = speed;
-        audioRef.current.play();
+        if (!audioEngine || !audioUrl) return;
+        audioEngine.setSpeed(speed);
+        audioEngine.play();
         setIsPlaying(true);
+        startTimeSync();
     };
 
     const pause = () => {
-        if (!audioRef.current) return;
-        audioRef.current.pause();
+        if (!audioEngine) return;
+        audioEngine.pause();
         setIsPlaying(false);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        setCurrentTime(audioEngine.getCurrentTime());
     };
 
     const stop = () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
+        if (!audioEngine) return;
+        audioEngine.stop();
         setIsPlaying(false);
+        setCurrentTime(0);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
 
     const changeSpeed = (s) => {
         setSpeed(s);
+        if (audioEngine) audioEngine.setSpeed(s);
     };
 
-    // Handle audio ending
-    const handleEnded = () => {
-        setIsPlaying(false);
+    const handleReset = () => {
+        stop();
+        resetView();
     };
 
-    // 2x2 grid of speeds - row-wise chunking
     const speedOptions = [
         [0.5, 1],
         [1.5, 2],
     ];
 
     return (
-        <div className="flex items-center gap-3 bg-gray-800/60 backdrop-blur rounded-xl px-4 py-2 border border-gray-700">
-            {audioUrl && (
-                <audio
-                    ref={audioRef}
-                    src={audioUrl}
-                    preload="auto"
-                    onEnded={handleEnded}
-                />
-            )}
-
+        <div className="flex items-center gap-3 bg-gray-800/60 backdrop-blur rounded-xl px-4 py-2 border border-gray-700 flex-wrap">
             <button
                 onClick={stop}
                 disabled={!audioUrl}
@@ -84,7 +105,7 @@ export default function ControlPanel({ audioUrl }) {
             <div className="flex items-center gap-2 ml-2">
                 <span className="text-xs text-gray-400">Speed:</span>
                 <div className="grid grid-cols-2 grid-rows-2 gap-1">
-                    {speedOptions.flat().map((s, idx) => (
+                    {speedOptions.flat().map((s) => (
                         <button
                             key={s}
                             onClick={() => changeSpeed(s)}
@@ -96,6 +117,18 @@ export default function ControlPanel({ audioUrl }) {
                     ))}
                 </div>
             </div>
+
+            <button
+                onClick={handleReset}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-bold transition ml-auto"
+            >
+                🔄 Reset
+            </button>
+
+            {/* Time display */}
+            <span className="text-xs text-gray-400 font-mono tabular-nums ml-2">
+                {currentTime.toFixed(1)}s
+            </span>
         </div>
     );
 }

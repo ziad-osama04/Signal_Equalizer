@@ -17,6 +17,11 @@ export function getPlayUrl(fileId) {
     return `/api/audio/play/${fileId}`;
 }
 
+export async function getSpectrum(fileId, domain = 'fourier') {
+    const res = await api.get(`/audio/spectrum/${fileId}?domain=${domain}`);
+    return res.data; // { freqs: [], magnitudes: [], domain, sr }
+}
+
 // ─── Modes ───────────────────────────────────────────────────────────────────
 
 export async function getModeSettings(mode) {
@@ -48,8 +53,8 @@ export async function aiProcess({ file_id, mode }) {
     return res.data; // { tracks: [{label, track_id, num_samples}] }
 }
 
-export async function compareEqVsAI({ file_id, mode, gains }) {
-    const res = await api.post('/ai/compare', { file_id, mode, gains });
+export async function compareEqVsAI({ file_id, mode, gains, domain, windows }) {
+    const res = await api.post('/ai/compare', { file_id, mode, gains, domain, windows });
     return res.data; // { equalizer, ai_model, verdict, eq_output_id, ai_output_id }
 }
 

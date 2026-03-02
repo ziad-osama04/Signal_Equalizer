@@ -1,0 +1,94 @@
+/* ────────────────────────────────────────────────────────
+   globals.css — Extended global styles
+   Imported in index.css alongside Tailwind.
+   ──────────────────────────────────────────────────────── */
+
+/* ── Vertical slider thumb (WebKit) ── */
+input[type="range"][orient="vertical"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(6, 182, 212, 0.5);
+    transition: box-shadow 0.2s;
+}
+
+input[type="range"][orient="vertical"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.8);
+}
+
+input[type="range"][orient="vertical"]::-webkit-slider-runnable-track {
+    background: transparent;
+}
+
+/* ── Vertical slider thumb (Firefox) ── */
+input[type="range"][orient="vertical"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(6, 182, 212, 0.5);
+}
+
+input[type="range"][orient="vertical"]::-moz-range-track {
+    background: transparent;
+}
+
+/* ── Glow pulse animation for active bands ── */
+@keyframes band-glow {
+    0%, 100% { filter: brightness(1) drop-shadow(0 0 2px currentColor); }
+    50%      { filter: brightness(1.2) drop-shadow(0 0 8px currentColor); }
+}
+
+.band-active {
+    animation: band-glow 1.5s ease-in-out infinite;
+}
+
+/* ── Drag handle cursors for WindowEditor ── */
+.drag-handle-left,
+.drag-handle-right {
+    cursor: ew-resize;
+}
+
+/* ── Smooth glass panel effect ── */
+.glass-panel {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    border-radius: 12px;
+}
+
+/* ── Playhead cursor line ── */
+.playhead-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    pointer-events: none;
+    z-index: 10;
+    transition: left 0.05s linear;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.4);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.6);
+}

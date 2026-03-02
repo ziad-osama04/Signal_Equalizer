@@ -3,7 +3,7 @@ Pydantic request / response models for backend/api/routes_ai.py.
 """
 
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 # ─── Request Models ───────────────────────────────────────────────────────────
@@ -25,6 +25,10 @@ class CompareRequest(BaseModel):
     domain: str = Field(
         "fourier",
         description="Transform domain used by the equalizer: 'fourier' | 'dct' | 'haar_wavelet'.",
+    )
+    windows: Optional[List[Any]] = Field(
+        None,
+        description="Frequency windows for generic mode: [{start_freq, end_freq, gain}].",
     )
 
 

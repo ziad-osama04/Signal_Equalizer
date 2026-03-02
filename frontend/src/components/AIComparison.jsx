@@ -6,9 +6,9 @@ import Spectrogram from './Spectrogram';
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 const DOMAINS = [
-    { value: 'fourier',      label: 'Fourier (FFT)', icon: '📊' },
-    { value: 'dct',          label: 'DCT',           icon: '📐' },
-    { value: 'haar_wavelet', label: 'Haar Wavelet',  icon: '〰️' },
+    { value: 'fourier', label: 'Fourier (FFT)', icon: '📊' },
+    { value: 'dct', label: 'DCT', icon: '📐' },
+    { value: 'haar_wavelet', label: 'Haar Wavelet', icon: '〰️' },
 ];
 
 async function fetchSpectrogramData(fileId) {
@@ -30,9 +30,9 @@ function DomainPills({ value, onChange }) {
                         className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
                                     border transition-all duration-150 select-none
                                     ${active
-                                        ? 'bg-cyan-600/30 border-cyan-500 text-cyan-200'
-                                        : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                                    }`}
+                                ? 'bg-cyan-600/30 border-cyan-500 text-cyan-200'
+                                : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                            }`}
                     >
                         <span>{d.icon}</span>
                         <span>{d.label}</span>
@@ -117,15 +117,15 @@ function OutputPanel({ label, accentClass, borderColor, spectrogramData, spectro
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AIComparison() {
-    const { inputFile, mode, gains } = useSignal();
+    const { inputFile, mode, gains, windows } = useSignal();
 
-    const [eqDomain,           setEqDomain]           = useState('fourier');
-    const [report,             setReport]             = useState(null);
-    const [loading,            setLoading]            = useState(false);
-    const [eqSpectrogram,      setEqSpectrogram]      = useState(null);
-    const [aiSpectrogram,      setAiSpectrogram]      = useState(null);
+    const [eqDomain, setEqDomain] = useState('fourier');
+    const [report, setReport] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [eqSpectrogram, setEqSpectrogram] = useState(null);
+    const [aiSpectrogram, setAiSpectrogram] = useState(null);
     const [spectrogramLoading, setSpectrogramLoading] = useState(false);
-    const [error,              setError]              = useState(null);
+    const [error, setError] = useState(null);
 
     // Track which domain was used for the last run (shown in the result label)
     const [runDomain, setRunDomain] = useState(null);
@@ -144,7 +144,8 @@ export default function AIComparison() {
                 file_id: inputFile.id,
                 mode,
                 gains,
-                domain: eqDomain,          // ← pass selected domain to backend
+                domain: eqDomain,
+                windows: mode === 'generic' ? windows : undefined,
             });
             setReport(result);
             setRunDomain(eqDomain);
@@ -168,10 +169,10 @@ export default function AIComparison() {
 
     const verdictStyle = !report ? null
         : report.verdict?.includes('Equalizer')
-            ? { bg: 'bg-cyan-900/30',   text: 'text-cyan-300',   border: 'border-cyan-800/60' }
+            ? { bg: 'bg-cyan-900/30', text: 'text-cyan-300', border: 'border-cyan-800/60' }
             : report.verdict?.includes('AI')
                 ? { bg: 'bg-purple-900/30', text: 'text-purple-300', border: 'border-purple-800/60' }
-                : { bg: 'bg-gray-800/50',   text: 'text-gray-300',   border: 'border-gray-700' };
+                : { bg: 'bg-gray-800/50', text: 'text-gray-300', border: 'border-gray-700' };
 
     const activeDomainLabel = DOMAINS.find(d => d.value === eqDomain)?.label ?? eqDomain;
 

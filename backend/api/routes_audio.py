@@ -100,6 +100,75 @@ def get_spectrogram(file_id: str):
     }
 
 
+@router.get("/spectrum/{file_id}")
+def get_spectrum(file_id: str, domain: str = "fourier"):
+    """
+    Computes and returns the frequency-domain magnitude representation
+    for any audio file, using the specified transform domain.
+
+    Query params:
+        domain: "fourier" | "dct" | "haar_wavelet"
+
+    Returns: { freqs: [...], magnitudes: [...], domain: str, sr: int }
+    """
+    from core.fft import compute_fft
+    from core.dct import compute_dct
+    from core.haar_wavelet import haar_transform
+
+    path = _find_audio(file_id)
+    try:
+        data, sr = load_audio(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error reading audio: {exc}")
+
+    import numpy as np
+
+    # Limit length for performance (max ~16k samples for transform display)
+    max_samples = 16384
+    if len(data) > max_samples:
+        data = data[:max_samples]
+
+    N = len(data)
+
+    if domain == "fourier":
+        coeffs = compute_fft(data)
+        N_coeffs = len(coeffs)
+        magnitudes = np.abs(coeffs[:N_coeffs // 2])
+        freqs = np.arange(len(magnitudes)) * sr / N_coeffs
+    elif domain == "dct":
+        coeffs = compute_dct(data)
+        N_coeffs = len(coeffs)
+        magnitudes = np.abs(coeffs[:N_coeffs // 2])
+        freqs = np.arange(len(magnitudes)) * sr / (2 * N_coeffs)
+    elif domain == "haar_wavelet":
+        coeffs = haar_transform(data)
+        N_coeffs = len(coeffs)
+        magnitudes = np.abs(coeffs[:N_coeffs // 2])
+        freqs = np.arange(len(magnitudes)) * sr / (2 * N_coeffs)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown domain: {domain}")
+
+    # Convert to dB for display
+    mag_max = magnitudes.max() if magnitudes.max() > 0 else 1.0
+    magnitudes_db = 20 * np.log10(np.clip(magnitudes / mag_max, 1e-10, None))
+
+    # Downsample for reasonable JSON size (max 1024 points)
+    max_points = 1024
+    if len(freqs) > max_points:
+        step = len(freqs) // max_points
+        freqs = freqs[::step]
+        magnitudes_db = magnitudes_db[::step]
+
+    logger.info("Spectrum computed", extra={"file_id": file_id, "domain": domain})
+
+    return {
+        "freqs": freqs.tolist(),
+        "magnitudes": magnitudes_db.tolist(),
+        "domain": domain,
+        "sr": sr,
+    }
+
+
 @router.get("/play/{file_id}")
 async def play_audio(file_id: str):
     """
