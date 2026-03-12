@@ -20,10 +20,11 @@ const DOMAIN_LABELS = {
  *   label  — display label prefix (e.g. "Input" or "Output")
  *   fileId — UUID of the audio file to analyze
  */
-export default function FFTViewer({ label, fileId }) {
+export default function FFTViewer({ label, fileId, forceDomain }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
-    const { freqScale, domain } = useSignal();
+    const { freqScale, domain: contextDomain } = useSignal();
+    const domain = forceDomain || contextDomain;
     const [spectrumData, setSpectrumData] = useState(null);
     const [loading, setLoading] = useState(false);
 

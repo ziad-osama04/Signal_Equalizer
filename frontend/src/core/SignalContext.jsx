@@ -15,6 +15,11 @@ export function SignalProvider({ children }) {
     // Frequency scale: 'linear' or 'audiogram' (log)
     const [freqScale, setFreqScale] = useState('audiogram');
 
+    // Wavelet-domain state (for custom modes dual-panel)
+    const [waveletGains, setWaveletGains] = useState([]);
+    const [waveletOutputFile, setWaveletOutputFile] = useState(null);
+    const [waveletSpectrogram, setWaveletSpectrogram] = useState(null);
+
     return (
         <SignalContext.Provider value={{
             inputFile, setInputFile,
@@ -26,6 +31,9 @@ export function SignalProvider({ children }) {
             spectrogram, setSpectrogram,
             inputSpectrogram, setInputSpectrogram,
             freqScale, setFreqScale,
+            waveletGains, setWaveletGains,
+            waveletOutputFile, setWaveletOutputFile,
+            waveletSpectrogram, setWaveletSpectrogram,
         }}>
             {children}
         </SignalContext.Provider>
@@ -37,3 +45,4 @@ export function useSignal() {
     if (!ctx) throw new Error('useSignal must be used within SignalProvider');
     return ctx;
 }
+

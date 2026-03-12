@@ -1,0 +1,33 @@
+{
+  "mode": "ecg",
+  "sliders": [
+    {
+      "label": "Normal Base",
+      "ranges": [
+        [0.5, 2.5]
+      ],
+      "default_gain": 1.0
+    },
+    {
+      "label": "Arrhythmia Type 1 (PVC)",
+      "ranges": [
+        [2.5, 10.0]
+      ],
+      "default_gain": 1.0
+    },
+    {
+      "label": "Arrhythmia Type 2 (VFib)",
+      "ranges": [
+        [10.0, 20.0]
+      ],
+      "default_gain": 1.0
+    },
+    {
+      "label": "Arrhythmia Type 3 (Afib)",
+      "ranges": [
+        [20.0, 40.0]
+      ],
+      "default_gain": 1.0
+    }
+  ]
+}

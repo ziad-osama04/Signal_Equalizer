@@ -12,6 +12,8 @@ numpy
 scipy
 soundfile
 PyWavelets
+scikit-learn
+librosa
 
 # Utilities / Development
 tqdm

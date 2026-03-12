@@ -2,62 +2,34 @@
     "mode": "instruments",
     "sliders": [
         {
+            "label": "Flute",
+            "ranges": [
+                [689, 1119],
+                [1119, 1781]
+            ],
+            "default_gain": 1.0
+        },
+        {
+            "label": "Maracas",
+            "ranges": [
+                [6000, 6500],
+                [6800, 7200]
+            ],
+            "default_gain": 1.0
+        },
+        {
             "label": "Piano",
             "ranges": [
-                [
-                    80,
-                    400
-                ],
-                [
-                    3000,
-                    8000
-                ]
+                [86, 344],
+                [344, 689]
             ],
             "default_gain": 1.0
         },
         {
-            "label": "Guitar",
+            "label": "Triangle",
             "ranges": [
-                [
-                    80,
-                    300
-                ],
-                [
-                    2000,
-                    5000
-                ]
-            ],
-            "default_gain": 1.0
-        },
-        {
-            "label": "Drums",
-            "ranges": [
-                [
-                    40,
-                    120
-                ],
-                [
-                    150,
-                    500
-                ],
-                [
-                    6000,
-                    12000
-                ]
-            ],
-            "default_gain": 1.0
-        },
-        {
-            "label": "Violin",
-            "ranges": [
-                [
-                    200,
-                    800
-                ],
-                [
-                    3000,
-                    9000
-                ]
+                [2812, 2929],
+                [5601, 5671]
             ],
             "default_gain": 1.0
         }

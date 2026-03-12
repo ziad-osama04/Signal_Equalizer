@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { SignalProvider, useSignal } from './core/SignalContext';
 import { SyncProvider, useSync } from './core/SyncContext';
 import AudioEngine from './core/AudioEngine';
-import { uploadAudio, getModeSettings, processSignal, getPlayUrl } from './core/ApiService';
+import { uploadAudio, processSignal, getPlayUrl } from './core/ApiService';
 import ModeSelector from './components/ModeSelector';
-import DomainSelector from './components/DomainSelector';
 import SliderControl from './components/SliderControl';
 import ControlPanel from './components/ControlPanel';
 import CineViewer from './components/CineViewer';
@@ -13,26 +12,28 @@ import SpectrumViewer from './components/SpectrumViewer';
 import FFTViewer from './components/FFTViewer';
 import AIComparison from './components/AIComparison';
 import GenericMode from './modes/generic/GenericMode';
-import InstrumentsMode from './modes/instruments/InstrumentsMode';
+import DualDomainPanel from './components/DualDomainPanel';
 
 function Equalizer() {
   const {
     inputFile, setInputFile,
     outputFile, setOutputFile,
     mode,
-    domain,
     gains, setGains,
     windows, setWindows,
     spectrogram, setSpectrogram,
     inputSpectrogram, setInputSpectrogram,
     freqScale, setFreqScale,
+    waveletOutputFile,
+    waveletSpectrogram,
   } = useSignal();
 
   const { isPlaying } = useSync();
 
-  const [sliderConfig, setSliderConfig] = useState([]);
   const [showSpectrograms, setShowSpectrograms] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  const isGeneric = mode === 'generic';
 
   // Shared AudioEngine instances
   const inputEngineRef = useRef(null);
@@ -47,19 +48,6 @@ function Equalizer() {
       outputEngineRef.current?.destroy();
     };
   }, []);
-
-  // Load slider config when mode changes (non-generic modes)
-  useEffect(() => {
-    if (mode === 'generic') {
-      // Generic mode handled by GenericMode component
-      setSliderConfig([]);
-      return;
-    }
-    getModeSettings(mode).then((data) => {
-      setSliderConfig(data.sliders);
-      setGains(data.sliders.map((s) => s.default_gain));
-    }).catch(console.error);
-  }, [mode]);
 
   // Handle file upload
   const handleUpload = async (e) => {
@@ -80,38 +68,32 @@ function Equalizer() {
     setLoading(false);
   };
 
-  // Process signal with current gains
-  const handleProcess = useCallback(async () => {
-    if (!inputFile) return;
+  // --- Generic Mode: frequency-only processing ---
+  const handleGenericProcess = useCallback(async () => {
+    if (!inputFile || !isGeneric) return;
     setLoading(true);
     try {
-      const payload = {
+      const result = await processSignal({
         file_id: inputFile.id,
-        mode,
+        mode: 'generic',
         gains,
-        domain,
-      };
-
-      // For generic mode, send windows
-      if (mode === 'generic') {
-        payload.windows = windows;
-      }
-
-      const result = await processSignal(payload);
+        domain: 'fourier', // Generic mode always uses Fourier
+        windows,
+      });
       setOutputFile(result);
       setSpectrogram(result.spectrogram);
     } catch (err) {
-      console.error('Process error:', err);
+      console.error('Generic process error:', err);
     }
     setLoading(false);
-  }, [inputFile, mode, gains, windows, domain]);
+  }, [inputFile, isGeneric, gains, windows]);
 
-  // Update a single slider (non-generic modes)
-  const updateGain = (index, value) => {
-    const next = [...gains];
-    next[index] = value;
-    setGains(next);
-  };
+  // Auto-apply for generic mode only (custom modes handled by DualDomainPanel)
+  useEffect(() => {
+    if (!inputFile || !isGeneric) return;
+    const timer = setTimeout(handleGenericProcess, 400);
+    return () => clearTimeout(timer);
+  }, [handleGenericProcess]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-white">
@@ -122,7 +104,6 @@ function Equalizer() {
             🎵 Signal Equalizer
           </h1>
           <ModeSelector />
-          <DomainSelector />
 
           {/* Frequency scale toggle */}
           <div className="flex items-center gap-1 ml-2">
@@ -175,44 +156,20 @@ function Equalizer() {
                 <Spectrogram label="Input Spectrogram" data={inputSpectrogram} />
               </div>
             )}
-            <FFTViewer label="Input" fileId={inputFile?.id} />
+            <FFTViewer label="Input" fileId={inputFile?.id} forceDomain="fourier" />
             <SpectrumViewer audioEngine={inputEngineRef.current} isPlaying={isPlaying} />
           </div>
         </div>
 
-        {/* Center: Sliders/GenericMode + Controls */}
+        {/* Center: Equalizer Panel */}
         <div className="flex flex-col items-center gap-3 bg-gray-900/50 backdrop-blur rounded-xl p-4 border border-gray-800 w-[440px] h-full overflow-y-auto">
           <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">Equalizer</h2>
 
-          {/* --- Generic Mode: WindowEditor + Sliders --- */}
-          {mode === 'generic' && (
-            <GenericMode />
-          )}
+          {/* --- Generic Mode: frequency-only sliders --- */}
+          {isGeneric && <GenericMode />}
 
-          {/* --- Instruments mode: custom component with color badges --- */}
-          {mode === 'instruments' && <InstrumentsMode />}
-
-          {/* --- Other non-generic modes: standard sliders --- */}
-          {mode !== 'generic' && mode !== 'instruments' && sliderConfig.length > 0 && (
-            <div className="flex gap-3">
-              {sliderConfig.map((s, i) => (
-                <SliderControl
-                  key={`${mode}-${i}`}
-                  label={s.label}
-                  value={gains[i] ?? 1}
-                  onChange={(v) => updateGain(i, v)}
-                />
-              ))}
-            </div>
-          )}
-
-          <button
-            onClick={handleProcess}
-            disabled={!inputFile || loading}
-            className="w-full px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 rounded-lg text-sm font-bold transition"
-          >
-            {loading ? '⏳ Processing...' : '🔊 Apply Equalizer'}
-          </button>
+          {/* --- Custom Modes: dual freq + wavelet domain panels --- */}
+          {!isGeneric && <DualDomainPanel />}
 
           <div className="mt-auto w-full">
             <footer className="flex justify-center w-full px-0 py-2 border-t border-gray-800 bg-transparent">
@@ -237,7 +194,7 @@ function Equalizer() {
                 <Spectrogram label="Output Spectrogram" data={spectrogram} />
               </div>
             )}
-            <FFTViewer label="Output" fileId={outputFile?.output_id} />
+            <FFTViewer label="Output" fileId={outputFile?.output_id} forceDomain="fourier" />
             <SpectrumViewer audioEngine={outputEngineRef.current} isPlaying={isPlaying} />
           </div>
         </div>

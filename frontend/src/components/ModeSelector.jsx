@@ -3,8 +3,9 @@ import { useSignal } from '../core/SignalContext';
 const MODES = [
     { value: 'generic', label: '🎛️ Generic Mode' },
     { value: 'instruments', label: '🎸 Musical Instruments' },
-    { value: 'voices', label: '🗣️ Human Voices' },
     { value: 'animals', label: '🐾 Animal Sounds' },
+    { value: 'voices', label: '🗣️ Human Voices' },
+    { value: 'ecg', label: '🫀 ECG Abnormalities' },
 ];
 
 export default function ModeSelector() {

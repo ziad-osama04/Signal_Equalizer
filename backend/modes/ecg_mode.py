@@ -2,16 +2,16 @@ import json
 import os
 from modes.generic_mode import apply_generic_eq
 
-SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "..", "settings", "voices.json")
+SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "..", "settings", "ecg.json")
 
-def load_voices_config():
-    """Loads the voices mode slider configuration from the JSON file."""
+def load_ecg_config():
+    """Loads the ECG mode slider configuration from the JSON file."""
     with open(SETTINGS_PATH, "r") as f:
         return json.load(f)
 
-def apply_voices_eq(signal, sr, gains, domain="fourier"):
+def apply_ecg_eq(signal, sr, gains, domain="fourier"):
     """
-    Voices Mode equalizer: maps each slider gain to the voice's frequency ranges.
+    ECG Abnormalities Mode equalizer: maps each slider gain to the arrhythmia frequency ranges.
     
     Args:
         signal: 1D numpy array
@@ -22,7 +22,7 @@ def apply_voices_eq(signal, sr, gains, domain="fourier"):
     Returns:
         output_signal: 1D numpy array
     """
-    config = load_voices_config()
+    config = load_ecg_config()
     sliders = config["sliders"]
     
     windows = []

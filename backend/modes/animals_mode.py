@@ -35,4 +35,4 @@ def apply_animals_eq(signal, sr, gains, domain="fourier"):
                 "gain": gain
             })
     
-    return apply_generic_eq(signal, sr, windows, domain=domain)
+    return apply_generic_eq(signal, sr, windows, domain=domain, base_gain=0.0)

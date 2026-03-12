@@ -21,6 +21,8 @@ from utils.audio_exporter import save_audio
 from utils.logger import get_logger
 from ai.demucs_wrapper import demucs_separate, spectral_separate, _DEMUCS_AVAILABLE
 from ai.asteroid_wrapper import asteroid_separate, _ASTEROID_AVAILABLE
+from ai.animals_wrapper import animals_nmf_separate, _NMF_AVAILABLE
+from ai.ecg_wrapper import ecg_ica_separate, _ICA_AVAILABLE
 from ai.comparison_report import generate_comparison_report
 from modes.generic_mode import apply_generic_eq
 from models.ai_models import (
@@ -71,6 +73,12 @@ def _separate_by_mode(signal, sr, mode, bands):
         num_voices = len(bands) if bands else 4
         separated = asteroid_separate(signal, sr, num_voices=num_voices)
         method = "asteroid" if _ASTEROID_AVAILABLE else "spectral"
+    elif mode == "animals":
+        separated = animals_nmf_separate(signal, sr, bands)
+        method = "nmf" if _NMF_AVAILABLE else "spectral"
+    elif mode == "ecg":
+        separated = ecg_ica_separate(signal, sr, bands)
+        method = "ica" if _ICA_AVAILABLE else "spectral"
     else:
         separated = spectral_separate(signal, sr, bands)
         method = "spectral"
@@ -85,9 +93,12 @@ def get_capabilities():
     return {
         "demucs_available":   _DEMUCS_AVAILABLE,
         "asteroid_available": _ASTEROID_AVAILABLE,
+        "nmf_available":      _NMF_AVAILABLE,
+        "ica_available":      _ICA_AVAILABLE,
         "instruments_method": "demucs"   if _DEMUCS_AVAILABLE   else "spectral",
         "voices_method":      "asteroid" if _ASTEROID_AVAILABLE else "spectral",
-        "animals_method":     "spectral",
+        "animals_method":     "nmf"      if _NMF_AVAILABLE      else "spectral",
+        "ecg_method":         "ica"      if _ICA_AVAILABLE      else "spectral",
     }
 
 
@@ -95,7 +106,7 @@ def get_capabilities():
 def ai_process(req: AIProcessRequest):
     """
     Separates uploaded audio into individual source tracks.
-    instruments → Demucs | voices → Asteroid | animals → spectral
+    instruments → Demucs | voices → Asteroid | animals → spectral | ecg → spectral
     """
     source_path = _find_audio(req.file_id)
     signal, sr = load_audio(source_path)
@@ -157,7 +168,7 @@ def compare_eq_vs_ai(req: CompareRequest):
     for i, source in enumerate(separated):
         gain = req.gains[i] if i < len(req.gains) else 1.0
         s = source["signal"]
-        ai_output[: len(s)] += s * gain
+        ai_output += s * gain
 
     # 3. Report + save
     report = generate_comparison_report(signal, eq_output, ai_output)

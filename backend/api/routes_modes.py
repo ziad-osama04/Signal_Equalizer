@@ -12,6 +12,7 @@ from modes.generic_mode import apply_generic_eq
 from modes.instruments_mode import apply_instruments_eq, load_instruments_config
 from modes.voices_mode import apply_voices_eq, load_voices_config
 from modes.animals_mode import apply_animals_eq, load_animals_config
+from modes.ecg_mode import apply_ecg_eq, load_ecg_config
 from core.fft import compute_fft
 from core.spectrogram import compute_spectrogram
 
@@ -30,7 +31,7 @@ class FrequencyWindow(BaseModel):
 
 class ProcessRequest(BaseModel):
     file_id: str
-    mode: str  # "generic" | "instruments" | "voices" | "animals"
+    mode: str  # "generic" | "instruments" | "voices" | "animals" | "ecg"
     gains: Optional[List[float]] = None
     windows: Optional[List[FrequencyWindow]] = None  # only for generic mode
     domain: str = "fourier"  # "fourier" | "dct" | "haar_wavelet"
@@ -75,6 +76,8 @@ def get_mode_settings(mode: str):
         config = load_voices_config()
     elif mode == "animals":
         config = load_animals_config()
+    elif mode == "ecg":
+        config = load_ecg_config()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
     
@@ -102,6 +105,12 @@ def process_signal(req: ProcessRequest):
     # 2. Load audio
     signal, sr = load_audio(source_path)
     
+    # Guard: truncate extremely long signals to avoid MemoryError
+    MAX_DURATION = 60  # seconds
+    max_samples = int(MAX_DURATION * sr)
+    if len(signal) > max_samples:
+        signal = signal[:max_samples]
+    
     # 3. Apply the selected mode
     domain = req.domain
     
@@ -126,6 +135,11 @@ def process_signal(req: ProcessRequest):
             raise HTTPException(status_code=400, detail="Animals mode requires 'gains'")
         output_signal = apply_animals_eq(signal, sr, req.gains, domain=domain)
         
+    elif req.mode == "ecg":
+        if req.gains is None:
+            raise HTTPException(status_code=400, detail="ECG mode requires 'gains'")
+        output_signal = apply_ecg_eq(signal, sr, req.gains, domain=domain)
+        
     else:
         raise HTTPException(status_code=400, detail=f"Unknown mode: {req.mode}")
     
@@ -135,8 +149,23 @@ def process_signal(req: ProcessRequest):
     save_audio(output_signal, sr, output_path)
     
     # 5. Compute output spectrogram
-    f_axis, t_axis, Sxx = compute_spectrogram(output_signal, sr, nperseg=256)
-    
+    # Adaptive segment size for long signals to keep response manageable
+    sig_len = len(output_signal)
+    nperseg = 256
+    if sig_len > 200_000:
+        nperseg = 1024
+    if sig_len > 500_000:
+        nperseg = 2048
+
+    f_axis, t_axis, Sxx = compute_spectrogram(output_signal, sr, nperseg=nperseg)
+
+    # Downsample time axis if too many columns (keep ≤ 500 cols)
+    max_cols = 500
+    if Sxx.shape[1] > max_cols:
+        step = Sxx.shape[1] // max_cols
+        Sxx = Sxx[:, ::step]
+        t_axis = t_axis[::step]
+
     return ProcessResponse(
         output_id=output_id,
         duration_sec=round(len(output_signal) / sr, 3),

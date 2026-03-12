@@ -74,7 +74,7 @@ def _soft_band_mask_1d(freqs: np.ndarray, start_f: float, end_f: float,
 
 
 def apply_generic_eq(signal: np.ndarray, sr: int, windows: list,
-                     domain: str = "fourier") -> np.ndarray:
+                     domain: str = "fourier", base_gain: float = 1.0) -> np.ndarray:
     """
     Generic Mode equalizer: applies arbitrary frequency windows with individual gains.
 
@@ -91,6 +91,7 @@ def apply_generic_eq(signal: np.ndarray, sr: int, windows: list,
             - end_freq   (Hz)
             - gain       (0.0 – 2.0)
         domain: transform domain ("fourier", "dwt_symlet8", "dwt_db4", "cwt_morlet")
+        base_gain: the gain applied to frequencies not covered by any window
 
     Returns:
         output_signal: 1D numpy array of the reconstructed signal
@@ -111,7 +112,7 @@ def apply_generic_eq(signal: np.ndarray, sr: int, windows: list,
     elif domain == "cwt_morlet":
         coeffs_2d, freqs_hz, scales = cwt_morlet_transform(signal, sr=sr)
         # For CWT: apply per-scale (per-row) gains
-        gain_per_row = np.ones(len(freqs_hz))
+        gain_per_row = np.full(len(freqs_hz), base_gain)
         weighted_gain = np.zeros(len(freqs_hz))
         weight_sum = np.zeros(len(freqs_hz))
         for w in windows:
@@ -142,7 +143,7 @@ def apply_generic_eq(signal: np.ndarray, sr: int, windows: list,
         weight_sum += mask
 
     # Build final gain mask
-    gain_mask = np.ones(N_coeffs)
+    gain_mask = np.full(N_coeffs, base_gain)
     covered = weight_sum > 1e-9
     gain_mask[covered] = weighted_gain_sum[covered] / weight_sum[covered]
 
