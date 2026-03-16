@@ -1,33 +1,55 @@
 {
   "mode": "ecg",
   "sliders": [
-    {
-      "label": "Normal Base",
-      "ranges": [
-        [0.5, 2.5]
-      ],
-      "default_gain": 1.0
-    },
-    {
-      "label": "Arrhythmia Type 1 (PVC)",
-      "ranges": [
-        [2.5, 10.0]
-      ],
-      "default_gain": 1.0
-    },
-    {
-      "label": "Arrhythmia Type 2 (VFib)",
-      "ranges": [
-        [10.0, 20.0]
-      ],
-      "default_gain": 1.0
-    },
-    {
-      "label": "Arrhythmia Type 3 (Afib)",
-      "ranges": [
-        [20.0, 40.0]
-      ],
-      "default_gain": 1.0
-    }
+      {
+          "label": "Normal Base",
+          "ranges": [
+              [0.5, 2.5]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "1st Degree AV Block (1dAVb)",
+          "ranges": [
+              [0.5, 4.0]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "Right Bundle Branch Block (RBBB)",
+          "ranges": [
+              [10.0, 50.0]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "Left Bundle Branch Block (LBBB)",
+          "ranges": [
+              [10.0, 50.0]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "Sinus Bradycardia (SB)",
+          "ranges": [
+              [0.5, 1.5]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "Atrial Fibrillation (AF)",
+          "ranges": [
+              [4.0, 10.0],
+              [350.0, 600.0]
+          ],
+          "default_gain": 1.0
+      },
+      {
+          "label": "Sinus Tachycardia (ST)",
+          "ranges": [
+              [1.5, 3.5]
+          ],
+          "default_gain": 1.0
+      }
   ]
 }

@@ -23,7 +23,50 @@ UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-_ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
+_ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".csv"}
+
+
+def _csv_to_wav(csv_path: str, file_id: str) -> tuple[str, int]:
+    """
+    Converts a CSV ECG file to a WAV file so the rest of the pipeline
+    can handle it identically to audio uploads.
+
+    Expects CSV with one numeric column per lead (first column used as
+    the signal). Assumes 500 Hz sample rate (standard ECG) if not
+    detectable from the file.
+
+    Returns: (wav_path, sample_rate)
+    """
+    import numpy as np
+    from utils.audio_exporter import save_audio
+
+    # Try loading directly first; fall back to skipping a header row
+    try:
+        data = np.loadtxt(csv_path, delimiter=",")
+    except ValueError:
+        # Header row present (e.g. PhysioNet "time,MLII,V5,..." format)
+        data = np.loadtxt(csv_path, delimiter=",", skiprows=1)
+
+    # Use first numeric column (lead I / MLII) as the signal
+    signal = data[:, 0] if data.ndim == 2 else data
+    signal = signal.astype(np.float32)
+
+    # Normalise to [-1, 1] for audio export
+    peak = np.abs(signal).max()
+    if peak > 0:
+        signal = signal / peak
+
+    ecg_sr = 500  # standard ECG sample rate
+
+    # Browsers require minimum ~3000 Hz for AudioContext decoding.
+    # Upsample to 4000 Hz for playback while keeping the waveform shape.
+    playback_sr = 4000
+    from scipy.signal import resample as scipy_resample
+    signal_up = scipy_resample(signal, int(len(signal) * playback_sr / ecg_sr)).astype(np.float32)
+
+    wav_path = os.path.join(UPLOAD_DIR, f"{file_id}.wav")
+    save_audio(signal_up, playback_sr, wav_path)
+    return wav_path, playback_sr
 
 
 def _find_audio(file_id: str) -> str:
@@ -53,6 +96,17 @@ async def upload_audio(file: UploadFile = File(...)):
         f.write(await file.read())
 
     logger.info("Audio file saved", extra={"file_id": file_id, "orig_filename": file.filename})
+
+    # ── CSV → WAV conversion for ECG signals ─────────────────────────────────
+    if ext == ".csv":
+        try:
+            wav_path, sr = _csv_to_wav(save_path, file_id)
+            os.remove(save_path)          # remove original CSV
+            save_path = wav_path
+            logger.info("CSV converted to WAV", extra={"file_id": file_id, "sr": sr})
+        except Exception as exc:
+            os.remove(save_path)
+            raise HTTPException(status_code=400, detail=f"CSV parse error: {exc}")
 
     try:
         data, sr = load_audio(save_path)

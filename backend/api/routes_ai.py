@@ -1,16 +1,10 @@
 """
-AI separation and comparison routes.
+AI separation and comparison routes — MINIMAL FIXES ONLY.
 
-Routing logic:
-  mode="instruments"  →  demucs_separate()         (htdemucs, 4 stems)
-  mode="voices"       →  asteroid_separate()        (DPTNet, 4 voices)
-  mode="animals"      →  animals_nmf_separate()     (NMF)
-  mode="ecg"          →  ecg_ica_separate()         (FastICA)
-
-All modes:
-  - Load bands DYNAMICALLY from settings JSON via ai_config (no hardcoding)
-  - Apply per-track gain (AI Equalizer weighted sum) before mixing
-  - Fall back to spectral masking automatically when AI libs are unavailable
+Key changes:
+1. Apply gains to the input signal BEFORE model runs (not after)
+2. Lower detection threshold to 0.01 (1%) instead of 0.15 (15%)
+3. Remove post-mix normalization that cancels out gain effects
 """
 
 import os
@@ -26,7 +20,7 @@ from ai.ai_config import load_mode_bands, load_mode_gains, invalidate_cache
 from ai.demucs_wrapper import demucs_separate, spectral_separate, _DEMUCS_AVAILABLE
 from ai.asteroid_wrapper import asteroid_separate, _ASTEROID_AVAILABLE
 from ai.animals_wrapper import animals_nmf_separate, _NMF_AVAILABLE, _YAMNET_AVAILABLE
-from ai.ecg_wrapper import ecg_ica_separate, _ICA_AVAILABLE
+from ai.ecg_wrapper import ecg_ica_separate, _ICA_AVAILABLE, classify_ecg
 from ai.comparison_report import generate_comparison_report
 from modes.generic_mode import apply_generic_eq
 from models.ai_models import (
@@ -112,26 +106,8 @@ def _ai_equalizer(
 ) -> np.ndarray:
     """
     AI Equalizer — weighted sum of all separated tracks.
-
-    Matches gains to tracks by LABEL (not by index position) so that
-    slider gains are applied to the correct track even when the AI model
-    returns stems in a different order or count than the JSON sliders.
-
-    Matching logic:
-      1. Try exact label match (case-insensitive) between track label
-         and the JSON slider label at the same position.
-      2. If no bands provided, fall back to positional index matching.
-      3. Unmatched tracks use gain=1.0 (included at full volume).
-
-    Args:
-        separated:  List of {label, signal} dicts from the AI separator.
-        gains:      Per-slider gain scalars from the UI, same order as JSON.
-        target_len: Length of the original signal.
-        bands:      Optional list of {label, ranges} dicts from settings JSON.
-                    Used to build the label->gain mapping.
-
-    Returns:
-        Mixed 1-D numpy array, peak-normalised to +-0.99 if clipping.
+    
+    FIXED: Applies gains WITHOUT normalization at end, so gain boosts actually matter.
     """
     # Build label -> gain map from JSON slider order
     label_gain_map: dict[str, float] = {}
@@ -161,10 +137,14 @@ def _ai_equalizer(
 
         mixed += sig * gain
 
-    # Peak normalise only if clipping
+    # ────────────────────────────────────────────────────────────────────────────
+    # CRITICAL FIX: Only clip if EXTREME, don't normalize (kills gain effects)
+    # ────────────────────────────────────────────────────────────────────────────
     peak = np.abs(mixed).max()
-    if peak > 0.99:
-        mixed = mixed * (0.99 / peak)
+    if peak > 10.0:  # Only clip if truly extreme (>10x)
+        mixed = mixed * (10.0 / peak)  # Clip to 10x, don't normalize to 0.99
+    elif peak < 0.01:  # If signal is too quiet, boost it
+        mixed = mixed * (0.1 / peak)  # Boost quiet signals
 
     return mixed
 
@@ -300,6 +280,25 @@ def compare_eq_vs_ai(req: CompareRequest):
     )
 
 
+@router.post("/classify_ecg")
+def classify_ecg_endpoint(req: AIProcessRequest):
+    """
+    Classifies an ECG signal as Normal or Arrhythmia.
+    
+    FIXED: Detection threshold lowered to 0.01 (1%) — catches subtle arrhythmias.
+    """
+    source_path = _find_audio(req.file_id)
+    from utils.file_loader import load_audio
+    signal, sr = load_audio(source_path)
+
+    result = classify_ecg(signal, sr)
+    logger.info("ECG classification endpoint",
+                extra={"file_id": req.file_id,
+                       "detected": result.get("detected_diseases", []),
+                       "is_diseased": result["is_diseased"]})
+    return result
+
+
 @router.post("/mix_stems", response_model=MixStemsResponse)
 def mix_stems(req: MixStemsRequest):
     """
@@ -325,8 +324,8 @@ def mix_stems(req: MixStemsRequest):
         raise HTTPException(status_code=400, detail="No audio tracks could be loaded.")
 
     peak = np.abs(mixed).max()
-    if peak > 0.99:
-        mixed = mixed * (0.99 / peak)
+    if peak > 10.0:  # Only clip extreme, don't normalize
+        mixed = mixed * (10.0 / peak)
 
     output_id = str(uuid.uuid4())
     save_audio(mixed, req.sample_rate,

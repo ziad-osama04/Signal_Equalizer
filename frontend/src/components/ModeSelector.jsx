@@ -5,7 +5,7 @@ const MODES = [
     { value: 'instruments', label: '🎸 Musical Instruments' },
     { value: 'animals', label: '🐾 Animal Sounds' },
     { value: 'voices', label: '🗣️ Human Voices' },
-    { value: 'ecg', label: '🫀 ECG Abnormalities' },
+    { value: 'ecg', label: '🩺 ECG Abnormalities' },
 ];
 
 export default function ModeSelector() {

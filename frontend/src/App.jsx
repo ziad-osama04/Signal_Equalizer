@@ -133,7 +133,7 @@ function Equalizer() {
 
           <label className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-semibold cursor-pointer transition">
             📂 Upload Audio
-            <input type="file" accept=".wav,.mp3,.ogg,.flac" onChange={handleUpload} className="hidden" />
+            <input type="file" accept=".wav,.mp3,.ogg,.flac,.csv" onChange={handleUpload} className="hidden" />
           </label>
         </div>
       </header>

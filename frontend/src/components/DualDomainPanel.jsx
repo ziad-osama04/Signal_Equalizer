@@ -3,6 +3,7 @@ import { useSignal } from '../core/SignalContext';
 import { getModeSettings, processSignal } from '../core/ApiService';
 import SliderControl from './SliderControl';
 import FFTViewer from './FFTViewer';
+import ECGDiagnosis from './ECGDiagnosis';
 
 /**
  * Optimal wavelet per custom mode (from domain_config.json research).
@@ -124,7 +125,15 @@ export default function DualDomainPanel() {
 
     return (
         <div className="flex flex-col gap-4 w-full">
-            {/* ─── Frequency Domain Section ─── */}
+            {/* ─── ECG Diagnosis Panel (ECG mode only) ─── */}
+        {mode === 'ecg' && (
+            <ECGDiagnosis
+                fileId={outputFile?.output_id || inputFile?.id}
+                label={outputFile ? 'Equalized Output' : 'Original Signal'}
+            />
+        )}
+
+        {/* ─── Frequency Domain Section ─── */}
             <div className="flex flex-col gap-2 p-3 rounded-xl bg-gray-800/40 border border-cyan-900/40">
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">
