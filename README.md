@@ -31,60 +31,67 @@
 ## 📋 Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Backend API](#backend-api)
-- [Frontend](#frontend)
-- [Equalizer Modes](#equalizer-modes)
-- [AI Models](#ai-models)
-- [Edge Deployment](#edge-deployment)
-- [Settings Files](#settings-files)
-- [Team](#team)
+- [Features](#-features)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+- [Backend API](#-backend-api)
+- [Frontend](#-frontend)
+- [Equalizer Modes](#-equalizer-modes)
+- [AI Models](#-ai-models)
+- [Settings Files](#-settings-files)
+- [Dataset](#-dataset)
+- [Testing](#-testing)
 
 ---
 
 ## Overview
 
-The Signal Equalizer is a web application that lets users upload audio signals, adjust frequency components through interactive sliders, and reconstruct the modified signal in real time. It supports multiple operating modes and compares traditional equalization against AI-based source separation.
+The Signal Equalizer is a web application that lets users upload audio signals, adjust frequency
+components through interactive sliders, and reconstruct the modified signal in real time. It supports
+five operating modes — Generic, Musical Instruments, Animal Sounds, Human Voices, and ECG Abnormalities —
+and compares traditional equalization against AI-based source separation across four transform domains.
 
 ---
 
 ## ✨ Features
 
 ### Equalizer Modes
-- **Generic Mode** — divide the frequency range into arbitrary subdivisions, each controlled by an independent slider (gain 0–2). Configurations are saved to a settings file and can be reloaded.
-- **Musical Instruments Mode** — individual sliders for each instrument in a mixed music signal (at least 4 instruments).
-- **Animal Sounds Mode** — individual sliders for each animal sound in a mixture (at least 4 animals).
-- **Human Voices Mode** — individual sliders for each speaker in a mixed voices signal (at least 4 speakers: male/female, young/old, different languages).
+- **Generic Mode** — divide the frequency range into arbitrary subdivisions, each controlled by an independent slider (gain 0–2). Configurations can be saved as JSON and reloaded.
+- **Musical Instruments Mode** — individual sliders for drums, bass, guitar, piano, vocals, and other in a mixed music signal.
+- **Animal Sounds Mode** — individual sliders for each animal sound in a mixture of at least 4 animals.
+- **Human Voices Mode** — individual sliders for each speaker (Man Voice, Old Man Voice, Female Voice, Spanish woman Voice).
+- **ECG Abnormalities Mode** — sliders control the spectral signature of each arrhythmia class (1dAVb, RBBB, LBBB, SB, AF, ST) via Butterworth bandpass filtering across all 12 leads, with live re-classification by the Keras ResNet.
+
+### Transform Domains
+- **Fourier (FFT)** — zero-padded to next power-of-2 via `numpy.fft`
+- **DWT Daubechies-4** — 8-level decomposition via PyWavelets
+- **DWT Symlet-8** — 8-level decomposition via PyWavelets
+- **CWT Morlet** — 64 log-spaced scales (20 Hz – 10 kHz) via PyWavelets
+
+For every custom mode, **both** Fourier and the mode-optimal wavelet are processed side-by-side in the Dual Domain Panel.
 
 ### Signal Viewers
-- Two **linked cine viewers** — one for input, one for output — that scroll and zoom in sync.
-- Full playback controls: play / pause / stop / speed control / zoom / pan / reset.
-- Audio playback for any loaded signal.
+- Two **linked cine viewers** — one for input, one for output — that scroll and zoom in exact sync via `SyncContext`.
+- Full playback controls: play / pause / stop / speed (0.5×, 1×, 1.5×, 2×) / zoom (scroll wheel) / pan (click-drag) / reset.
+- Audio playback via Web Audio API.
 
 ### Frequency Display
-- Live **Fourier transform** plot with switchable scale: **Linear** or **Audiogram**.
-- Two **spectrograms** (input + output) that update on every slider change.
+- Frequency-domain magnitude plot with switchable scale: **Linear** or **Audiogram** (log, standard audiometric ticks at 125–16000 Hz).
+- Two **spectrograms** (input + output) that update automatically on every slider change (400 ms debounce).
 - Toggle show/hide spectrograms without interrupting playback.
+- Real-time frequency spectrum bar visualizer during playback.
 
 ### AI Source Separation
-- **Instruments** → [Demucs htdemucs_6s](https://github.com/facebookresearch/demucs) — separates into drums, bass, other, vocals, guitar, piano.
-- **Voices** → [Asteroid ConvTasNet](https://github.com/asteroid-team/asteroid) — separates up to 4 speakers using recursive 2-speaker passes.
-- **Animals** → Spectral soft-mask fallback (Gaussian STFT masks).
-- Automatic fallback to soft spectral masking when AI libraries are not installed.
+- **Instruments** → Demucs `htdemucs_6s` — 6 stems: drums, bass, other, vocals, guitar, piano.
+- **Voices** → Asteroid DPTNet + pyannote.audio 3.1 — recursive 2-speaker passes for 4 voices, with YIN-based gender classification.
+- **Animals** → YAMNet-guided spectral separation (TFLite) with NMF fallback.
+- **ECG** → Keras ResNet (Ribeiro et al. 2020) — 6-class sigmoid on 12-lead (4096 × 12) input.
+- Automatic fallback to Wiener-normalised soft spectral masking when AI libraries are not installed.
 
 ### AI vs EQ Comparison
-- Side-by-side **SNR**, **MSE**, and **Pearson correlation** metrics.
-- Automatic verdict: which method performs better.
+- Side-by-side **SNR**, **MSE**, and **Pearson correlation** metrics with automatic verdict.
 - Spectrogram and audio playback for both outputs.
 - `/mix_stems` endpoint to re-mix separated tracks with new gains without re-running the model.
-
-### Edge Deployment Simulation
-- Simulated edge device constraints (RAM, CPU cores, chunk size, quantization).
-- Performance monitoring with latency, CPU %, and memory snapshots.
-- Threshold violation detection.
-- Benchmark endpoint: runs both EQ and AI under edge constraints and compares.
 
 ---
 
@@ -93,90 +100,98 @@ The Signal Equalizer is a web application that lets users upload audio signals, 
 ```
 Signal_Equalizer/
 │
-├── backend/                        ← FastAPI server
-│   ├── main.py                     ← App entry point (run: py main.py)
+├── backend/                          ← FastAPI server
+│   ├── main.py                       ← App entry point (run: py main.py)
 │   ├── requirements.txt
 │   │
-│   ├── api/                        ← Route handlers
-│   │   ├── __init__.py
-│   │   ├── routes_audio.py         ← Upload, play, spectrogram
-│   │   ├── routes_modes.py         ← Equalizer processing
-│   │   ├── routes_ai.py            ← AI separation + comparison
-│   │   ├── routes_basis.py         ← Best-basis detection
-│   │   
+│   ├── api/                          ← Route handlers
+│   │   ├── routes_audio.py           ← Upload, play, spectrogram, spectrum
+│   │   ├── routes_modes.py           ← Equalizer processing (all modes)
+│   │   └── routes_ai.py              ← AI separation, comparison, ECG classify
 │   │
-│   ├── models/                     ← Pydantic request/response models
-│   │   ├── __init__.py
-│   │   ├── audio_models.py
-│   │   ├── ai_models.py
-│   │   ├── basis_models.py
-│   │   └── mode_models.py
+│   ├── core/                         ← Custom DSP implementations
+│   │   ├── fft.py                    ← FFT + IFFT (numpy.fft, zero-padded)
+│   │   ├── spectrogram.py            ← Custom STFT spectrogram (Hamming window)
+│   │   ├── window_functions.py       ← Hamming window implemented from scratch
+│   │   ├── dwt_db4.py                ← DWT Daubechies-4 + frequency axis builder
+│   │   ├── dwt_symlet8.py            ← DWT Symlet-8 forward/inverse
+│   │   └── cwt_morlet.py             ← CWT Morlet (64 log-spaced scales)
 │   │
-│   ├── core/                       ← Custom DSP implementations (no libraries)
-│   │   ├── __init__.py
-│   │   ├── fft.py                  ← Custom FFT
-│   │   ├── ifft.py                 ← Custom IFFT
-│   │   ├── spectrogram.py          ← Custom spectrogram
-│   │   └── basis_detection.py      ← Fourier / DCT / Haar basis selection
+│   ├── modes/                        ← Equalizer mode implementations
+│   │   ├── generic_mode.py           ← Core equalizer (all 4 domains, soft masking)
+│   │   ├── instruments_mode.py       ← Loads instruments.json → generic_mode
+│   │   ├── voices_mode.py            ← Loads voices.json → generic_mode
+│   │   ├── animals_mode.py           ← Loads animals.json → generic_mode
+│   │   └── ecg_mode.py               ← Loads ecg.json → generic_mode (base_gain=0)
 │   │
-│   ├── ai/                         ← AI separation wrappers
-│   │   ├── __init__.py
-│   │   ├── demucs_wrapper.py       ← Demucs htdemucs_6s + spectral fallback
-│   │   ├── asteroid_wrapper.py     ← Asteroid ConvTasNet + spectral fallback
-│   │   ├── metrics.py              ← SNR, MSE, correlation
-│   │   └── comparison_report.py    ← EQ vs AI verdict generator
+│   ├── ai/                           ← AI separation wrappers
+│   │   ├── demucs_wrapper.py         ← Demucs htdemucs_6s + spectral fallback
+│   │   ├── asteroid_wrapper.py       ← Asteroid DPTNet + spectral fallback
+│   │   ├── pyannote_wrapper.py       ← pyannote diarization + YIN gender classify
+│   │   ├── animals_wrapper.py        ← YAMNet-guided + NMF + spectral fallback
+│   │   ├── ecg_wrapper.py            ← Keras ResNet, 12-lead, Grad-CAM, ICA
+│   │   ├── metrics.py                ← SNR, MSE, Pearson correlation
+│   │   ├── comparison_report.py      ← EQ vs AI verdict generator
+│   │   └── ai_config.py              ← Shared paths and mode band loader
 │   │
-│   ├── modes/                      ← Equalizer mode implementations
-│   │   ├── __init__.py
-│   │   ├── generic_mode.py
-│   │   ├── instruments_mode.py
-│   │   ├── voices_mode.py
-│   │   └── animals_mode.py
+│   ├── models/                       ← Pretrained model weights
+│   │   ├── 5c90dfd2-34c22ccb.th      ← Demucs htdemucs_6s checkpoint
+│   │   ├── ecg_model.hdf5            ← Keras ResNet ECG classifier weights
+│   │   ├── yamnet.tflite             ← YAMNet audio classifier (TFLite)
+│   │   └── pytorch_model.bin         ← Additional model weights
 │   │
-│   ├
-│   │   
-│   │   
-│   │   
-│   │  
-│   │   
-│   │      
-│   │       
+│   ├── settings/                     ← Mode slider configs (editable JSON)
+│   │   ├── domain_config.json        ← Available transform domains + default
+│   │   ├── instruments.json          ← Instrument slider labels + freq ranges
+│   │   ├── voices.json               ← Voice slider labels + freq ranges
+│   │   ├── animals.json              ← Animal slider labels + freq ranges
+│   │   └── ecg.json                  ← ECG/arrhythmia slider labels + freq bands
 │   │
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── file_loader.py          ← Load + mono-convert + resample audio
-│   │   ├── audio_exporter.py       ← Save numpy array as WAV
-│   │   ├── logger.py               ← JSON-structured logger
-│   │   └── json_handler.py         ← Safe JSON read/write/merge
-│   │
-│   ├── settings/                   ← Mode slider configurations (editable JSON)
-│   │   ├── domain_config.json
-│   │   ├── instruments.json
-│   │   ├── voices.json
-│   │   └── animals.json
-│   │
-│   ├── uploads/                    ← Auto-created on startup
-│   └── outputs/                    ← Auto-created on startup
+│   └── utils/
+│       ├── file_loader.py            ← Load + mono-convert + resample audio
+│       ├── audio_exporter.py         ← Save numpy array as WAV
+│       ├── generate_synthetic.py     ← Synthetic signal generator (8 pure tones)
+│       └── logger.py                 ← JSON-structured logger
 │
-└── frontend/                       ← React + Vite application
-    ├── index.html
-    ├── vite.config.js
+├── dataset/                          ← Sample audio and ECG files
+│   ├── musical instruments mix.wav
+│   ├── animal_mix_final.wav
+│   ├── human_mix final.wav
+│   ├── 3people.wav / music1.wav / flute.wav
+│   ├── ecg_normal.wav / ecg_afib.wav / ecg_pvc.wav / ecg_vfib.wav / ecg_mix.wav
+│   └── 1dAVb/ AF/ LBBB/ RBBB/ SB/ ST/   ← Real 12-lead ECG CSVs (PhysioNet CODE)
+│
+└── frontend/                         ← React + Vite application
     ├── package.json
+    ├── vite.config.js
     └── src/
-        ├── App.jsx                 ← Root layout + upload + process logic
-        ├── main.jsx
-        ├── index.css
+        ├── App.jsx                   ← Root layout + upload + process logic
         ├── core/
-        │   ├── SignalContext.jsx    ← Global state (file, mode, gains, …)
-        │   └── ApiService.js       ← All fetch calls to backend
-        └── components/
-            ├── ModeSelector.jsx
-            ├── DomainSelector.jsx
-            ├── SliderControl.jsx
-            ├── ControlPanel.jsx    ← Play/pause/stop/speed/zoom/pan
-            ├── CineViewer.jsx      ← Linked scrolling waveform viewer
-            ├── Spectrogram.jsx     ← Canvas-based spectrogram renderer
-            └── AIComparison.jsx    ← AI vs EQ metrics + spectrograms
+        │   ├── SignalContext.jsx      ← Global state (file, mode, gains, …)
+        │   ├── SyncContext.jsx        ← Shared playback/zoom/pan state
+        │   ├── AudioEngine.js         ← Web Audio API playback engine
+        │   └── ApiService.js          ← All fetch calls to backend
+        ├── components/
+        │   ├── ModeSelector.jsx       ← Mode dropdown
+        │   ├── SliderControl.jsx      ← Vertical gain slider (0–2)
+        │   ├── DualDomainPanel.jsx    ← Fourier + Wavelet side-by-side equalizer
+        │   ├── ControlPanel.jsx       ← Play/pause/stop/speed/reset
+        │   ├── CineViewer.jsx         ← Linked scrolling waveform viewer
+        │   ├── Spectrogram.jsx        ← Canvas spectrogram renderer
+        │   ├── FFTViewer.jsx          ← Frequency-domain magnitude plot
+        │   ├── SpectrumViewer.jsx     ← Real-time bar spectrum during playback
+        │   ├── AIComparison.jsx       ← AI vs EQ metrics + spectrograms
+        │   ├── ECGDiagnosis.jsx       ← ECG score bars + live re-classification
+        │   └── ECG12LeadViewer.jsx    ← 12-lead waveform renderer
+        ├── modes/
+        │   ├── generic/
+        │   │   ├── GenericMode.jsx    ← Band editor + save/load JSON + sliders
+        │   │   └── WindowEditor.jsx   ← SVG drag-to-resize band visualizer
+        │   └── instruments/
+        │       └── InstrumentsMode.jsx
+        └── utils/
+            ├── audiogramScale.js      ← Linear ↔ audiogram frequency mapping
+            └── mathHelpers.js         ← clamp and math utilities
 ```
 
 ---
@@ -184,7 +199,7 @@ Signal_Equalizer/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.11+ (**standard Windows install from python.org** — not MSYS2/MinGW)
 - Node.js 18+
 
 ### Backend
@@ -192,161 +207,194 @@ Signal_Equalizer/
 ```bash
 cd backend
 
-# Install dependencies
-pip install -r requirements.txt
+# Install core dependencies
+pip install soundfile numpy scipy PyWavelets librosa scikit-learn fastapi "uvicorn[standard]" python-multipart
 
-# Optional — install real AI models for full separation quality
-pip install demucs torch torchaudio
-pip install asteroid
+# Optional — install AI models for full separation quality
+pip install torch torchaudio demucs        # Instruments: Demucs htdemucs_6s
+pip install asteroid                        # Voices: DPTNet
+pip install pyannote.audio                  # Voices: speaker diarization (needs HF_TOKEN)
+pip install tensorflow                      # ECG: Keras ResNet
+
+# Generate the synthetic signal for Generic Mode validation
+python utils/generate_synthetic.py          # → dataset/synthetic_signal.wav
 
 # Start the server
 py main.py
 # → http://localhost:8000
-# → http://localhost:8000/docs  (interactive API docs)
+# → http://localhost:8000/docs  (interactive Swagger UI)
 ```
+
+> **pyannote.audio** requires a HuggingFace access token. Set it before starting:
+> `set HF_TOKEN=hf_xxxxxxxxxxxxxxxx` (CMD) or add `HF_TOKEN=hf_xxx` to a `.env` file in `backend/`.
 
 ### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start dev server
 npm run dev
 # → http://localhost:5173
 ```
+
+Both processes must stay running at the same time. Open **http://localhost:5173** in your browser.
 
 ---
 
 ## 🔌 Backend API
 
-All routes are prefixed and documented at `http://localhost:8000/docs`.
+All routes are documented at `http://localhost:8000/docs`.
 
 ### Audio — `/api/audio`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/upload` | Upload an audio file, returns UUID + spectrogram |
-| `GET` | `/play/{file_id}` | Stream audio file for playback |
-| `GET` | `/spectrogram/{file_id}` | Compute + return spectrogram for any saved file |
+| `POST` | `/upload` | Upload WAV/MP3/CSV, returns UUID + spectrogram |
+| `GET`  | `/play/{file_id}` | Stream audio file for browser playback |
+| `GET`  | `/spectrogram/{file_id}` | Compute + return spectrogram |
+| `GET`  | `/spectrum/{file_id}?domain=` | Frequency-domain magnitude (all 4 domains) |
 
 ### Modes — `/api/modes`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/settings/{mode}` | Get slider config for a mode |
-| `POST` | `/settings/{mode}` | Save updated slider config |
-| `GET` | `/domains` | List available transform domains |
-| `POST` | `/process` | Apply equalizer, returns output spectrogram |
+| `GET`  | `/settings/{mode}` | Get slider config for a mode |
+| `POST` | `/settings/{mode}` | Save updated slider config to JSON |
+| `GET`  | `/domains` | List available transform domains |
+| `POST` | `/process` | Apply equalizer, returns output + spectrogram |
 
 ### AI — `/api/ai`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/capabilities` | Check which AI backends are available |
+| `GET`  | `/capabilities` | Check which AI backends are installed |
 | `POST` | `/process` | Separate audio into stems/voices |
 | `POST` | `/compare` | EQ vs AI metrics comparison |
 | `POST` | `/mix_stems` | Re-mix separated tracks with new gains |
-
-### Edge — `/api/edge`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/deploy` | Simulate deploying to edge device |
-| `GET` | `/status` | Current deployment health + config |
-| `POST` | `/simulate` | Run EQ or AI under edge constraints |
-| `GET` | `/metrics` | Full performance history |
-| `GET` | `/metrics/summary` | Aggregated mean/max stats |
-| `POST` | `/benchmark` | Run both methods on edge + compare |
-
-### Basis — `/api/basis`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/analyze` | Find best basis (Fourier / DCT / Haar wavelet) |
+| `POST` | `/classify_ecg_full` | 12-lead ECG classification with slider gains |
 
 ---
 
 ## 🖥 Frontend
 
-The frontend is a **React + Vite** SPA styled with **Tailwind CSS**.
+The frontend is a **React 18 + Vite** SPA styled with **Tailwind CSS**.
 
-### Key components
+### Key Components
 
 | Component | Responsibility |
 |-----------|----------------|
-| `SignalContext` | Global state: uploaded file, mode, gains, spectrograms |
+| `SignalContext` | Global state: uploaded file, mode, gains, spectrograms, wavelet state |
+| `SyncContext` | Shared playback time, zoom/pan view window across both cine viewers |
+| `AudioEngine` | Web Audio API engine — load / play / pause / stop / speed |
 | `ApiService` | Centralised fetch functions for all backend endpoints |
-| `App.jsx` | Root layout: header, cine viewers, slider panel, AI footer |
-| `CineViewer` | Linked waveform player — both viewers sync scroll/zoom |
+| `App.jsx` | Root layout: header → three-column (input / equalizer / output) → AI footer |
+| `CineViewer` | Linked waveform viewer — min/max per-pixel rendering, shared sync |
+| `DualDomainPanel` | Fourier + wavelet equalizer side-by-side for all custom modes |
 | `Spectrogram` | Canvas renderer — accepts `{f, t, Sxx}` from the API |
+| `FFTViewer` | Magnitude spectrum plot, linear/audiogram scale |
 | `SliderControl` | Vertical gain slider (0–2), label from settings JSON |
-| `ControlPanel` | Play / pause / stop / speed / zoom / pan / reset |
+| `ControlPanel` | Play / pause / stop / speed / reset |
 | `AIComparison` | Metrics table, verdict, spectrogram + audio for EQ and AI |
+| `ECGDiagnosis` | Per-disease confidence bars, highlighted leads, live re-classification |
+| `GenericMode` | Band editor with save/load JSON + per-band sliders |
+| `WindowEditor` | SVG drag-to-resize frequency band visualizer |
 
 ---
 
 ## 🎛 Equalizer Modes
 
-Modes are configured in `backend/settings/*.json` and loaded automatically by the frontend. Each slider maps to one or more frequency ranges.
+Modes are configured in `backend/settings/*.json`. The frontend fetches settings fresh on every mode
+switch — no server restart needed after editing a JSON file.
 
 ### Generic Mode
-User-defined subdivisions. Example configuration:
+User-defined subdivisions. Each band has a start frequency, end frequency, and gain (0–2).
+Configurations can be saved as `.json` and reloaded via the Save / Load buttons.
 
-```json
-{
-  "mode": "generic",
-  "sliders": [
-    { "label": "31 Hz",  "ranges": [[20, 45]],     "default_gain": 1.0 },
-    { "label": "63 Hz",  "ranges": [[45, 90]],     "default_gain": 1.0 },
-    { "label": "125 Hz", "ranges": [[90, 180]],    "default_gain": 1.0 }
-  ]
-}
-```
+### Custom Modes
 
-### Custom Mode (e.g. instruments.json)
-Each slider can span **multiple non-contiguous frequency ranges**:
+**Musical Instruments** (`instruments.json`) — 6 sliders, each spanning two non-contiguous ranges covering the fundamental and harmonic content of each instrument:
 
-```json
-{
-  "mode": "instruments",
-  "sliders": [
-    { "label": "Drums",   "ranges": [[20, 200], [2000, 5000]], "default_gain": 1.0 },
-    { "label": "Bass",    "ranges": [[60, 300]],               "default_gain": 1.0 },
-    { "label": "Vocals",  "ranges": [[300, 3400]],             "default_gain": 1.0 },
-    { "label": "Guitar",  "ranges": [[80, 5000]],              "default_gain": 1.0 }
-  ]
-}
-```
+| Slider | Frequency Ranges | What it targets |
+|--------|-----------------|-----------------|
+| Drums | 20–200 Hz, 200–500 Hz | Kick/snare body + low-mid transients |
+| Bass | 30–150 Hz, 150–300 Hz | Fundamental + first harmonic |
+| Guitar | 80–600 Hz, 600–1200 Hz | Fundamental + bright harmonics |
+| Piano | 28–500 Hz, 500–4186 Hz | Full piano range (A0 = 27.5 Hz, C8 = 4186 Hz) |
+| Vocals | 85–1000 Hz, 1000–3400 Hz | Voice body + presence range |
+| Other | 200–2000 Hz, 2000–8000 Hz | Strings, synths, high-frequency content |
 
-> Settings files can be edited outside the app. Reloading the page applies the changes automatically.
+**Animal Sounds** (`animals.json`) — 4 sliders, each targeting the characteristic vocalisation frequencies of one animal:
+
+| Slider | Frequency Ranges | Animal vocalisation |
+|--------|-----------------|---------------------|
+| Dog | 350–468 Hz, 703–790 Hz | Bark body + resonance |
+| Cat | 1100–1300 Hz, 1700–1900 Hz | Meow mid-frequency bands |
+| Night Cricket | 2109–2156 Hz | Narrow chirp band |
+| Cow | 129–281 Hz, 468–703 Hz, 843–1100 Hz | Low moo + overtones |
+
+**Human Voices** (`voices.json`) — 4 sliders:
+
+| Slider | Frequency Ranges | Speaker type |
+|--------|-----------------|--------------|
+| Man Voice | 85–180 Hz, 250–500 Hz | Adult male |
+| Old Man Voice | 70–150 Hz, 1000–2500 Hz | Elderly male |
+| Female Voice | 165–3500 Hz | Adult female |
+| Spanish woman Voice | 220–5000 Hz | Non-English female |
+
+**ECG Abnormalities** (`ecg.json`) — 7 sliders:
+
+| Slider | Frequency Band | Arrhythmia signature |
+|--------|---------------|----------------------|
+| Normal Base | 0.5 – 2.5 Hz | Uniform signal scale |
+| 1dAVb | 0.5 – 4.0 Hz | PR interval prolongation |
+| RBBB | 10 – 50 Hz | QRS widening |
+| LBBB | 10 – 50 Hz | QRS widening |
+| SB | 0.5 – 1.5 Hz | Slow heart rate |
+| AF | 4–10 Hz + 350–600 Hz | Irregular rhythm + fibrillation |
+| ST | 1.5 – 3.5 Hz | Fast heart rate |
+
+### Domain Recommendation per Mode
+
+| Mode | Optimal Domain | Reason |
+|------|---------------|--------|
+| Generic | Fourier (FFT) | General purpose |
+| Musical Instruments | DWT Symlet-8 | Near-symmetric, efficient for smooth tonal content |
+| Human Voices | DWT Daubechies-4 | Handles transient consonants well |
+| Animal Sounds | CWT Morlet | High time-frequency resolution for non-stationary calls |
+| ECG | DWT Daubechies-4 | Efficient for transient QRS complexes |
 
 ---
 
 ## 🤖 AI Models
 
 ### Instruments — Demucs `htdemucs_6s`
+Hybrid transformer (time-domain + spectrogram encoder-decoder with cross-attention) separating music
+into **6 stems**: drums, bass, other, vocals, guitar, piano.
+- Loaded from local checkpoint `backend/models/5c90dfd2-34c22ccb.th`
+- Input resampled to 44,100 Hz; output resampled back to 22,050 Hz
+- Fallback: Wiener-normalised Gaussian soft-mask spectral separation
 
-Separates a music mixture into **6 stems**: drums, bass, other, vocals, guitar, piano.
-
-- Model caches after first load — subsequent requests are fast.
-- Input resampled to 44100 Hz for the model, output resampled back to 22050 Hz.
-- Falls back to Gaussian soft-mask spectral separation if `demucs` is not installed.
-
-### Voices — Asteroid `ConvTasNet`
-
-Separates a mixture into **4 voices** using recursive 2-speaker passes:
-
+### Voices — Asteroid DPTNet + pyannote.audio
+**DPTNet** (`JorisCos/DPTNet_Libri2Mix_sepclean_8k`, 8 kHz) separates 4 voices via recursive 2-speaker passes:
 ```
-Pass 1:  mixture  →  [A,  B]
-Pass 2a:    A     →  [Voice 1,  Voice 2]
-Pass 2b:    B     →  [Voice 3,  Voice 4]
+Pass 1:  mixture  →  [A, B]
+Pass 2a:    A     →  [Voice 1, Voice 2]
+Pass 2b:    B     →  [Voice 3, Voice 4]
 ```
+**pyannote.audio 3.1** provides speaker diarization; each speaker is gender-classified via YIN
+pitch estimation (F0 < 165 Hz → Male, ≥ 165 Hz → Female).
+Fallback: pitch-band spectral masking.
 
-- Pretrained on WHAM! dataset, native rate 8000 Hz.
-- Falls back to frequency-band spectral masking if `asteroid` is not installed.
+### Animals — YAMNet + NMF
+YAMNet (TFLite, AudioSet classes) provides per-frame animal confidence for temporal gating.
+NMF provides spectral component decomposition.
+Fallback: Wiener spectral masking using frequency bands from `animals.json`.
+
+### ECG — Keras ResNet (Ribeiro et al. 2020)
+1D ResNet trained on the CODE-15% dataset. Input shape **(1, 4096, 12)**, 6-class sigmoid output.
+- Sliders apply Butterworth bandpass filtering to all 12 leads → re-classify → scores update live
+- Grad-CAM saliency highlights which time regions drove each prediction
+- ICA (FastICA) fallback when TensorFlow is unavailable
 
 ### Comparison Metrics
 
@@ -354,40 +402,14 @@ Pass 2b:    B     →  [Voice 3,  Voice 4]
 |--------|-------------|
 | SNR (dB) | Higher |
 | MSE | Lower |
-| Pearson Correlation | Higher (closer to 1.0) |
-
----
-
-## 🔲 Edge Deployment
-
-The edge module simulates deploying the equalizer to a resource-constrained device.
-
-Configuration lives in `backend/edge/edge_config.json`:
-
-```json
-{
-  "device":    { "id": "edge-node-01", "platform": "linux/arm64" },
-  "compute":   { "cpu_cores": 2, "ram_mb": 512, "chunk_size_samples": 4096 },
-  "performance_thresholds": {
-    "max_latency_ms": 500,
-    "max_memory_mb":  400,
-    "max_cpu_percent": 80
-  },
-  "quantization": { "enabled": true, "precision": "float32" }
-}
-```
-
-Simulation effects applied:
-- **Quantization** — signal cast to float32/float16/int16 and back.
-- **Chunked processing** — signal processed in `chunk_size_samples` blocks.
-- **Artificial latency** — proportional to audio duration and number of CPU cores.
-- **Threshold violations** — flagged if latency/memory/CPU exceed configured limits.
+| Pearson Correlation | Closer to 1.0 |
 
 ---
 
 ## 📁 Settings Files
 
-All mode configurations live in `backend/settings/` and are plain JSON — editable in any text editor. Restarting the backend is **not required**; the frontend fetches settings fresh on mode switch.
+All mode configurations live in `backend/settings/` as plain JSON — editable in any text editor.
+The frontend fetches fresh settings on every mode switch; no server restart required.
 
 | File | Purpose |
 |------|---------|
@@ -395,109 +417,68 @@ All mode configurations live in `backend/settings/` and are plain JSON — edita
 | `instruments.json` | Instrument slider labels + frequency ranges |
 | `voices.json` | Voice slider labels + frequency ranges |
 | `animals.json` | Animal slider labels + frequency ranges |
+| `ecg.json` | ECG/arrhythmia slider labels + disease frequency bands |
 
 ---
 
-## 🧪 Testing the Application
+## 📂 Dataset
 
-### Running the tests
+| File / Folder | Mode | Description |
+|--------------|------|-------------|
+| `musical instruments mix.wav` | Instruments | Multi-instrument mixture |
+| `animal_mix_final.wav` | Animals | Mixed animal sounds |
+| `human_mix final.wav` | Voices | 4-speaker mixture |
+| `3people.wav` | Voices | 3-speaker mixture |
+| `music1.wav` / `flute.wav` | Generic | Single-instrument test files |
+| `ecg_normal/afib/pvc/vfib/mix.wav` | ECG | ECG conditions rendered as audio |
+| `1dAVb/ AF/ LBBB/ RBBB/ SB/ ST/` | ECG | Real 12-lead CSVs from PhysioNet CODE study (500 Hz, 3 recordings each) |
 
+To generate the synthetic signal for Generic Mode validation (8 pure tones: 100, 300, 500, 1000,
+2000, 5000, 8000, 12000 Hz):
 ```bash
-cd backend
-pytest tests/ -v
+python backend/utils/generate_synthetic.py
+# → dataset/synthetic_signal.wav
 ```
-
-- `test_fft.py` — validates `compute_fft` matches `numpy.fft.fft`, validates `compute_ifft` reconstructs signal
-- `test_spectrogram.py` — validates custom STFT spectrogram output matches scipy.signal.spectrogram
-
-### Recommended Audio Samples per mode
-
-**Generic Mode:**
-- Any WAV/MP3 file works
-- For best demonstration: a file with multiple distinct frequency components
-- Try the existing `dataset/music1.wav` or any music file
-
-**Musical Instruments Mode:**
-- Need: WAV/MP3 mix with at least 4 distinct instruments
-- Sources: [Freesound.org](https://freesound.org) → "multitrack music mix"
-- Or: [ccMixter](http://ccmixter.org) — Creative Commons music stems
-- Or: download stems individually from [Looperman](https://www.looperman.com) and mix in Audacity
-  (File → Import → Audio × 4 → Tracks → Mix → Mix and Render → File → Export as WAV)
-- Ready to use: `dataset/musical instruments mix.wav`
-
-**Animal Sounds Mode:**
-- Need: WAV mix with at least 4 different animal sounds
-- Sources: [Freesound.org](https://freesound.org) → search "dog bark", "cat meow", "cricket", "cow"
-- Mix 4 clips in Audacity, same procedure as above
-- Ready to use: `dataset/animal_mix_final.wav`
-
-**Human Voices Mode:**
-- Need: WAV mix of at least 4 different speakers (male/female/young/old, varied languages)
-- Sources:
-  - [LibriSpeech via OpenSLR](https://openslr.org/12/) — free multi-speaker audiobooks
-  - [Common Voice by Mozilla](https://commonvoice.mozilla.org/en/datasets) — multilingual, diverse speakers
-  - [VoxCeleb](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/) — celebrity speech clips
-- Ready to use: `dataset/human_mix final.wav` or `dataset/3people.wav`
-
-**ECG Mode (planned):**
-- Need: ECG signals as WAV — 1 normal + 3 arrhythmia types
-- Source: [PhysioNet MIT-BIH Arrhythmia Database](https://physionet.org/content/mitdb/1.0.0/)
-- Conversion: `pip install wfdb` then use `wfdb.rdsamp('record_name')` to load `.dat` files
-
-### Quick test walkthrough
-
-1. Start backend (`py main.py` from `backend/`) and frontend (`npm run dev` from `frontend/`)
-2. Open `http://localhost:5173`
-3. Upload audio via "📂 Upload Audio" button
-4. Select mode (e.g. "🎸 Musical Instruments")
-5. Select domain (e.g. "🎸 DWT Symlet-8")
-6. Adjust sliders (0 = silence that frequency band, 2 = double)
-7. Click "🔊 Apply Equalizer" — output waveform + spectrogram update
-8. Click "⚡ Compare" in AI VS EQUALIZER panel to benchmark vs AI model
+Upload this file in Generic Mode and set individual band sliders to 0 to verify each frequency
+disappears in the output spectrogram.
 
 ---
 
-## 📂 Codebase Changes Log
+## 🧪 Testing
 
-### Files DELETED
-- `backend/core/ifft.py` — merged into fft.py
-- `backend/core/dct.py` — replaced by DWT/CWT wavelet transforms
-- `backend/core/haar_wavelet.py` — replaced by DWT/CWT wavelet transforms
-- `backend/core/dft.py` — unused O(N²) DFT reference, removed
+### Quick Walkthrough
+1. Start backend: `cd backend && py main.py`
+2. Start frontend: `cd frontend && npm run dev`
+3. Open `http://localhost:5173`
+4. Upload `dataset/musical instruments mix.wav`
+5. Select mode **🎸 Musical Instruments**
+6. Adjust sliders — output spectrogram and waveform update automatically after 400 ms
+7. Click **⚡ Compare** in the AI vs Equalizer panel to benchmark against Demucs
 
-### Files CREATED
-- `backend/core/dwt_symlet8.py` — DWT Symlet-8 forward/inverse transform
-- `backend/core/dwt_db4.py` — DWT Daubechies-4 forward/inverse + freq axis builder
-- `backend/core/cwt_morlet.py` — CWT Morlet forward/inverse transform
-- `frontend/src/modes/instruments/InstrumentsMode.jsx` — custom instruments equalizer UI
+### Recommended Files per Mode
 
-### Files MODIFIED
-- `backend/core/fft.py` — rewritten using numpy (compute_fft + compute_ifft merged)
-- `backend/modes/generic_mode.py` — supports 4 new domains, DWT/CWT code paths added
-- `backend/core/basis_detection.py` — tests 4 new domains (fourier/symlet8/db4/morlet)
-- `backend/api/routes_audio.py` — spectrum endpoint updated for new domains
-- `backend/ai/demucs_wrapper.py` — import path for compute_ifft fixed (1 line)
-- `backend/tests/test_fft.py` — import path for compute_ifft fixed (1 line)
-- `backend/settings/domain_config.json` — updated available_domains list
-- `backend/models/basis_models.py` — written from scratch (was empty)
-- `requirements.txt` — added PyWavelets
-- `frontend/src/components/DomainSelector.jsx` — new domain options
-- `frontend/src/components/AIComparison.jsx` — new domain options
-- `frontend/src/components/FFTViewer.jsx` — new domain labels and colors
-- `frontend/src/App.jsx` — InstrumentsMode component plugged in
-- `README.md` — testing guide + codebase changes log added
+| Mode | File to upload |
+|------|---------------|
+| Generic | `dataset/synthetic_signal.wav` or any WAV |
+| Musical Instruments | `dataset/musical instruments mix.wav` |
+| Animal Sounds | `dataset/animal_mix_final.wav` |
+| Human Voices | `dataset/human_mix final.wav` |
+| ECG | Any CSV from `dataset/1dAVb/`, `dataset/AF/`, etc. |
 
 ---
 
 ## ⚙️ Implementation Notes
 
-- **FFT / IFFT** — `core/fft.py` provides both `compute_fft` and `compute_ifft` using `numpy.fft`. Input is zero-padded to the next power of 2.
-- **DWT transforms** — `core/dwt_symlet8.py` and `core/dwt_db4.py` use PyWavelets (`pywt`) with 8-level decomposition. `build_dwt_freq_axis` maps each level to its center frequency.
-- **CWT transform** — `core/cwt_morlet.py` uses complex Morlet wavelet with 64 log-spaced scales covering 20 Hz – 10 kHz. Includes robust fallback for inverse CWT.
-- **Soft masking** — Gaussian-shaped frequency masks replace hard binary cutoffs, preserving signal energy at band edges. `_soft_band_mask` handles Fourier's mirrored negative frequencies; `_soft_band_mask_1d` handles positive-only DWT/CWT frequencies.
-- **Basis detection** — `core/basis_detection.py` evaluates Fourier, DWT-Symlet8, DWT-db4, and CWT-Morlet representations and selects the sparsest (best) basis for a given signal.
-- **Linked viewers** — both cine viewers share the same time position and zoom level via `SignalContext`.
-- **Audiogram scale** — frequency axis can be switched to audiogram (dB HL) scale for hearing-related analysis.
+- **FFT / IFFT** — `core/fft.py` provides `compute_fft` and `compute_ifft` using `numpy.fft`. Input is zero-padded to the next power of 2.
+- **Spectrogram** — Custom STFT in `core/spectrogram.py` using a hand-coded Hamming window (`w(n) = 0.54 − 0.46·cos(2πn/N−1)`), 256-point FFT, 32-sample overlap, PSD scaling matching scipy.
+- **DWT** — `core/dwt_db4.py` and `core/dwt_symlet8.py` use PyWavelets with 8-level decomposition. `build_dwt_freq_axis` assigns each coefficient the centre frequency of its level's band.
+- **CWT** — `core/cwt_morlet.py` uses complex Morlet with 64 log-spaced scales covering 20 Hz – 10 kHz. Robust inverse CWT with real-part summation fallback.
+- **Soft masking** — Gaussian roll-off masks (`σ = 15% of bandwidth`) eliminate Gibbs ringing at band edges. Overlapping bands are resolved by Wiener-style weighted averaging so no frequency bin is double-counted.
+- **Linked viewers** — both `CineViewer` instances share `viewStart`, `viewEnd`, and `currentTime` from `SyncContext`. Any scroll or zoom on either viewer updates both simultaneously at the React render level.
+- **Audiogram scale** — log₁₀ frequency mapping with standard audiometric tick marks at 125, 250, 500, 1000, 2000, 4000, 8000, 16000 Hz.
+- **Auto-update** — all slider changes fire a 400 ms debounced `processSignal()` call. No manual Apply button required.
+- **ECG feedback loop** — each ECG slider applies a zero-phase Butterworth bandpass filter to all 12 leads, targeting that disease's characteristic frequency band, then re-runs the Keras ResNet. Moving a slider directly raises or lowers the corresponding arrhythmia score in real time.
+
 ---
 
 ## 📄 License
