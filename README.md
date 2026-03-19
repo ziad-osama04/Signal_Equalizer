@@ -6,26 +6,20 @@
 
 ## 📸 Screenshots
 
-### Main Interface
-<!-- Add screenshot of the full app here -->
-<img width="960" height="540" alt="Screenshot 2026-03-19 162148" src="https://github.com/user-attachments/assets/bd473cec-82a5-4167-9dcf-fb4b3a7c0821" />
+### Main Interface — Generic Mode
+![Main Interface – Generic Mode](image/Screenshot%202026-03-19%20162148.png)
 
+### Musical Instruments Mode — Dual Domain + AI Comparison
+![Musical Instruments Mode](image/Screenshot%202026-03-19%20163836.png)
 
+### Animal Sounds Mode — Dual Domain + AI Comparison
+![Animal Sounds Mode](image/Screenshot%202026-03-19%20163744.png)
 
-### Equalizer Sliders
-<!-- Add screenshot of the equalizer panel with sliders here -->
-<img width="275" height="241" alt="Screenshot 2026-03-01 152700" src="https://github.com/user-attachments/assets/373fb2b9-4b68-41cd-99eb-ba3cf64946cd" />
+### ECG Abnormalities — Overlay View with Diagnosis
+![ECG Abnormalities – Overlay](image/Screenshot%202026-03-19%20163623.png)
 
-
-### AI Comparison Panel
-<!-- Add screenshot of the AI vs EQ comparison panel here -->
-<img width="947" height="210" alt="Screenshot 2026-03-01 152719" src="https://github.com/user-attachments/assets/bee86cb2-329e-44cf-a55d-8e5ece4805c4" />
-
-
-### Spectrograms
-<!-- Add screenshot of input/output spectrograms here -->
-<img width="338" height="281" alt="Screenshot 2026-03-01 152735" src="https://github.com/user-attachments/assets/291772e3-3dab-4133-a8c1-8462f08c1ba6" />
-<img width="343" height="285" alt="Screenshot 2026-03-01 152752" src="https://github.com/user-attachments/assets/c067bdd4-9b08-493c-8bd5-7a4bc34ea266" />
+### ECG Abnormalities — Stacked 12-Lead View
+![ECG Abnormalities – Stacked](image/Screenshot%202026-03-19%20163642.png)
 
 ---
 
