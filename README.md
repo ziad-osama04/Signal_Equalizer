@@ -8,7 +8,8 @@
 
 ### Main Interface
 <!-- Add screenshot of the full app here -->
-<img width="960" height="540" alt="Screenshot 2026-03-01 152853" src="https://github.com/user-attachments/assets/6705cfaa-c0cb-413f-b53c-d5cbb5873ff7" />
+<img width="960" height="540" alt="Screenshot 2026-03-19 162148" src="https://github.com/user-attachments/assets/bd473cec-82a5-4167-9dcf-fb4b3a7c0821" />
+
 
 
 ### Equalizer Sliders
